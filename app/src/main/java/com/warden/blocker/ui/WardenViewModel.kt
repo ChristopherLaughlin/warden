@@ -8,6 +8,7 @@ import com.warden.blocker.data.BlockedItem
 import com.warden.blocker.data.InterceptMode
 import com.warden.blocker.data.Schedule
 import com.warden.blocker.security.PinHasher
+import com.warden.blocker.security.PinResult
 import com.warden.blocker.system.FocusEndWorker
 import com.warden.blocker.wardenContainer
 import kotlinx.coroutines.flow.SharingStarted
@@ -132,9 +133,19 @@ class WardenViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearPin() = viewModelScope.launch { container.settings.clearPin() }
 
-    /** Suspends on the DataStore read; returns true when [pin] matches the stored hash. */
-    suspend fun verifyPin(pin: String): Boolean {
-        val (hash, salt) = container.settings.pinCredentials() ?: return false
-        return PinHasher.verify(pin, salt, hash)
+    /** Verifies [pin], enforcing a compounding lockout after repeated failures. */
+    suspend fun verifyPin(pin: String): PinResult {
+        val now = System.currentTimeMillis()
+        val lockUntil = container.settings.pinLockUntil()
+        if (lockUntil > now) return PinResult.Locked(((lockUntil - now) / 1000).toInt() + 1)
+
+        val (hash, salt) = container.settings.pinCredentials() ?: return PinResult.Wrong
+        return if (PinHasher.verify(pin, salt, hash)) {
+            container.settings.recordPinSuccess()
+            PinResult.Ok
+        } else {
+            val newLock = container.settings.recordPinFailure()
+            if (newLock > now) PinResult.Locked(((newLock - now) / 1000).toInt() + 1) else PinResult.Wrong
+        }
     }
 }

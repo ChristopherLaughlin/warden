@@ -35,6 +35,8 @@ class SettingsStore(private val context: Context) {
         val BLOCK_DOH = booleanPreferencesKey("block_doh")
         val BLOCK_NOTIFICATIONS = booleanPreferencesKey("block_notifications")
         val FOCUS_SESSIONS_DONE = intPreferencesKey("focus_sessions_done")
+        val PIN_FAILS = intPreferencesKey("pin_fails")
+        val PIN_LOCK_UNTIL = longPreferencesKey("pin_lock_until")
     }
 
     val masterEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.MASTER_ENABLED] ?: false }
@@ -112,6 +114,31 @@ class SettingsStore(private val context: Context) {
             it.remove(Keys.PIN_HASH)
             it.remove(Keys.PIN_SALT)
         }.let { }
+
+    // --- PIN brute-force protection ---
+    suspend fun pinLockUntil(): Long = context.dataStore.data.first()[Keys.PIN_LOCK_UNTIL] ?: 0L
+
+    suspend fun recordPinSuccess() =
+        context.dataStore.edit { it.remove(Keys.PIN_FAILS); it.remove(Keys.PIN_LOCK_UNTIL) }.let { }
+
+    /**
+     * Record a failed attempt; after 5 failures apply a compounding lockout (30s, 60s, 120s…
+     * capped at 1h). Returns the epoch-millis the lock lasts until (0 if not yet locked).
+     */
+    suspend fun recordPinFailure(): Long {
+        var lockUntil = 0L
+        context.dataStore.edit { p ->
+            val fails = (p[Keys.PIN_FAILS] ?: 0) + 1
+            p[Keys.PIN_FAILS] = fails
+            if (fails >= 5) {
+                val step = (fails - 5).coerceAtMost(7) // 0..7
+                val seconds = (30L shl step).coerceAtMost(3600L)
+                lockUntil = System.currentTimeMillis() + seconds * 1000
+                p[Keys.PIN_LOCK_UNTIL] = lockUntil
+            }
+        }
+        return lockUntil
+    }
 
     /** Returns (hash, salt) or null if no PIN configured. */
     suspend fun pinCredentials(): Pair<String, String>? {

@@ -107,8 +107,8 @@ fun HomeScreen(
                     )
                 }
                 Text(
-                    "Turning this on starts a local, private VPN that filters DNS on-device. " +
-                        "No traffic leaves your phone through Warden.",
+                    "Turning this on starts a local, on-device VPN that filters DNS. Warden adds no " +
+                        "servers of its own — allowed lookups go to your normal DNS resolver.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

@@ -36,6 +36,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // for BuildConfig.DEBUG (FLAG_SECURE only in release)
     }
 }
 

@@ -54,6 +54,12 @@ class InterceptActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Anti-tapjacking: a malicious overlay must not be able to trick taps on "Continue"
+        // (which grants access) or dismiss the block.
+        window.decorView.filterTouchesWhenObscured = true
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            window.setHideOverlayWindows(true)
+        }
         val kind = intent.getStringExtra(EXTRA_KIND) ?: KIND_BLOCK
         val itemId = intent.getLongExtra(EXTRA_ITEM_ID, -1L)
         val reason = intent.getStringExtra(EXTRA_REASON)?.let { runCatching { LimitReason.valueOf(it) }.getOrNull() }

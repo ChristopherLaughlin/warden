@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.warden.blocker.security.PinResult
 import kotlinx.coroutines.launch
 
 private const val PIN_LEN = 4
@@ -54,11 +55,11 @@ fun SetPinDialog(onDone: (String) -> Unit, onDismiss: () -> Unit) {
     )
 }
 
-/** Verify dialog; [verify] runs off the DB and returns true on match. */
+/** Verify dialog; [verify] runs off the DB and returns a [PinResult] (enforces lockout). */
 @Composable
 fun VerifyPinDialog(
     title: String,
-    verify: suspend (String) -> Boolean,
+    verify: suspend (String) -> PinResult,
     onSuccess: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -76,8 +77,11 @@ fun VerifyPinDialog(
                 if (entry.length == PIN_LEN) {
                     val attempt = entry
                     scope.launch {
-                        if (verify(attempt)) onSuccess()
-                        else { entry = ""; error = "Wrong PIN" }
+                        when (val result = verify(attempt)) {
+                            PinResult.Ok -> onSuccess()
+                            PinResult.Wrong -> { entry = ""; error = "Wrong PIN" }
+                            is PinResult.Locked -> { entry = ""; error = "Too many tries — locked for ${result.seconds}s" }
+                        }
                     }
                 }
             }
@@ -96,6 +100,7 @@ private fun PinDialog(
     onBackspace: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    SecureScreen() // FLAG_SECURE (release) + anti-tapjacking while the PIN pad is visible
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},

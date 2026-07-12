@@ -7,7 +7,9 @@ import javax.crypto.spec.PBEKeySpec
 
 /** PBKDF2 hashing so a stored PIN can't be trivially recovered from device storage. */
 object PinHasher {
-    private const val ITERATIONS = 120_000
+    // OWASP-recommended baseline for PBKDF2-HMAC-SHA256 (API 26+). Slows brute force of the
+    // small PIN space; paired with rate-limiting/lockout in SettingsStore.
+    private const val ITERATIONS = 310_000
     private const val KEY_LENGTH = 256
 
     fun newSalt(): String {

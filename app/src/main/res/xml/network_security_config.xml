@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Warden makes no HTTP(S) calls of its own (only local DNS filtering over UDP). Forbid
+     cleartext traffic entirely as defense-in-depth. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

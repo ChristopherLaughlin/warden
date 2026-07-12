@@ -3,6 +3,7 @@ package com.warden.blocker.vpn
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
@@ -20,6 +21,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.DatagramChannel
@@ -37,6 +39,12 @@ class WardenVpnService : VpnService() {
 
     @Volatile private var blockedDomains: Set<String> = emptySet()
 
+    /** The device's real DNS resolvers, captured before the tunnel takes over the active
+     *  network. We forward non-blocked queries here so Warden never redirects your DNS to a
+     *  third party of its own choosing. */
+    @Volatile private var upstreamDns: List<InetAddress> = emptyList()
+    private val fallbackDns: InetAddress by lazy { InetAddress.getByName(FALLBACK_DNS) }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> { stopTunnel(); stopSelf(); return START_NOT_STICKY }
@@ -48,6 +56,9 @@ class WardenVpnService : VpnService() {
     private fun startTunnel() {
         if (tunnel != null) { scope.launch { refreshBlocklist() }; return }
         startForeground(NOTIF_ID, buildNotification())
+
+        // Capture the real resolvers BEFORE establish() — afterwards the active network is us.
+        upstreamDns = systemDnsServers()
 
         val builder = Builder()
             .setSession("Warden")
@@ -94,9 +105,8 @@ class WardenVpnService : VpnService() {
 
                 val name = parsed.qname ?: continue
                 if (isBlocked(name)) {
-                    runCatching {
-                        output.write(DnsPacket.buildSinkholeResponse(packet, read, parsed))
-                    }.onFailure { Log.w(TAG, "sinkhole write failed for $name: ${it.message}") }
+                    // Never log the domain — that would leak browsing history into logcat.
+                    runCatching { output.write(DnsPacket.buildSinkholeResponse(packet, read, parsed)) }
                 } else {
                     forward(packet, read, parsed, upstream, output)
                 }
@@ -124,7 +134,8 @@ class WardenVpnService : VpnService() {
             val query = ByteBuffer.wrap(
                 packet, parsed.dnsPayloadOffset, parsed.dnsPayloadLen,
             )
-            upstream.send(query, InetSocketAddress(UPSTREAM_DNS, DnsPacket.DNS_PORT))
+            val target = upstreamDns.firstOrNull() ?: fallbackDns
+            upstream.send(query, InetSocketAddress(target, DnsPacket.DNS_PORT))
             val replyBuf = ByteBuffer.allocate(MTU)
             upstream.socket().soTimeout = 3000
             upstream.receive(replyBuf)
@@ -133,9 +144,17 @@ class WardenVpnService : VpnService() {
             replyBuf.get(reply)
             output.write(wrapReply(packet, parsed, reply))
         } catch (e: Exception) {
-            Log.w(TAG, "DNS forward failed for ${parsed.qname}: ${e.message}")
+            // Don't log the domain (privacy); the message alone is enough to diagnose.
+            Log.w(TAG, "DNS forward failed: ${e.javaClass.simpleName}")
         }
     }
+
+    /** The device's DNS servers on the underlying network (empty if unavailable). */
+    private fun systemDnsServers(): List<InetAddress> = runCatching {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return emptyList()
+        val net = cm.activeNetwork ?: return emptyList()
+        cm.getLinkProperties(net)?.dnsServers?.filterNot { it.isLoopbackAddress } ?: emptyList()
+    }.getOrDefault(emptyList())
 
     /** Wrap a raw upstream DNS reply in IP/UDP headers pointed back at the querying app. */
     private fun wrapReply(request: ByteArray, parsed: DnsPacket.Parsed, dnsReply: ByteArray): ByteArray {
@@ -204,7 +223,8 @@ class WardenVpnService : VpnService() {
         const val ACTION_STOP = "com.warden.blocker.VPN_STOP"
         private const val VIRTUAL_ADDRESS = "10.111.222.1"
         private const val VIRTUAL_DNS = "10.111.222.2"
-        private const val UPSTREAM_DNS = "1.1.1.1"
+        // Used only if the OS exposes no resolver (rare); prefer the device's own DNS.
+        private const val FALLBACK_DNS = "1.1.1.1"
         private const val MTU = 32767
         private const val NOTIF_ID = 1001
     }
