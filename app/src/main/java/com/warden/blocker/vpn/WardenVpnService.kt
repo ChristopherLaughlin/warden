@@ -73,26 +73,39 @@ class WardenVpnService : VpnService() {
     }
 
     private fun runPacketLoop(pfd: ParcelFileDescriptor) {
+        // Guard the whole loop: a malformed packet or transient socket error must never
+        // crash the app — it just stops filtering until blocking is toggled again.
         val input = FileInputStream(pfd.fileDescriptor)
         val output = FileOutputStream(pfd.fileDescriptor)
         val packet = ByteArray(MTU)
-        val upstream = DatagramChannel.open().also { protect(it.socket()) }
-
-        while (scope.isActive) {
-            val read = try { input.read(packet) } catch (e: Exception) { break }
-            if (read <= 0) continue
-            val parsed = DnsPacket.parse(packet, read) ?: continue
-            if (parsed.dstPort != DnsPacket.DNS_PORT) continue
-
-            val name = parsed.qname ?: continue
-            if (isBlocked(name)) {
-                val response = DnsPacket.buildSinkholeResponse(packet, read, parsed)
-                runCatching { output.write(response) }
-            } else {
-                forward(packet, read, parsed, upstream, output)
-            }
+        val upstream = try {
+            DatagramChannel.open().also { protect(it.socket()) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not open upstream DNS socket; stopping tunnel", e)
+            return
         }
-        runCatching { upstream.close() }
+
+        try {
+            while (scope.isActive) {
+                val read = try { input.read(packet) } catch (e: Exception) { break }
+                if (read <= 0) continue
+                val parsed = try { DnsPacket.parse(packet, read) } catch (e: Exception) { null } ?: continue
+                if (parsed.dstPort != DnsPacket.DNS_PORT) continue
+
+                val name = parsed.qname ?: continue
+                if (isBlocked(name)) {
+                    runCatching {
+                        output.write(DnsPacket.buildSinkholeResponse(packet, read, parsed))
+                    }.onFailure { Log.w(TAG, "sinkhole write failed for $name: ${it.message}") }
+                } else {
+                    forward(packet, read, parsed, upstream, output)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Packet loop terminated unexpectedly", e)
+        } finally {
+            runCatching { upstream.close() }
+        }
     }
 
     /** A domain is blocked if it equals or is a subdomain of any blocked entry. */
