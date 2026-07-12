@@ -39,11 +39,13 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 - [x] **Strict mode** + **device-admin uninstall protection**
 - [x] **PIN lock** (PBKDF2, salted) gating settings and disabling
 - [x] **Focus streak** + screen-time dashboard ("track your wins")
+- [x] **In-app feed blocking** — block just Reels / Shorts / Explore / For You / Spotlight
+      while the rest of the app keeps working (accessibility node detection)
 - [x] Master on/off with VPN consent flow, restart-after-reboot
 
 **Roadmap (see `SPEC.md`):**
 - [ ] Conditions beyond time: Wi-Fi network, location, launch-count
-- [ ] In-app feature blocking (Reels / Shorts / feeds) via accessibility
+- [ ] Tune in-app feed detection signals against current app versions (needs real devices)
 - [ ] Adult-content category blocking (curated domain lists)
 - [ ] Notification blocking for blocked apps during active windows
 - [ ] Quick-settings tile + Pomodoro focus sessions
@@ -56,6 +58,7 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 | Website blocking (all apps) | ✓ | limited | ✓ (DNS VPN) |
 | App blocking | ✓ | ✓ | ✓ |
 | Mindful pause / intention | — | ✓ | ✓ |
+| In-app feed blocking (Reels/Shorts) | — | ✓ | ✓ |
 | Open/time/cooldown limits | ✓ | ✓ | ✓ |
 | Schedules | ✓ | ✓ | ✓ |
 | Strict mode + uninstall lock | ✓ | ✓ | ✓ |

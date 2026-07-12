@@ -109,7 +109,7 @@ fun HomeScreen(vm: WardenViewModel, onToggleBlocking: (Boolean) -> Unit) {
 }
 
 @Composable
-fun BlocklistScreen(vm: WardenViewModel, onOpenAppPicker: () -> Unit) {
+fun BlocklistScreen(vm: WardenViewModel, onOpenAppPicker: () -> Unit, onOpenFeatures: () -> Unit) {
     val items by vm.items.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<BlockedItem?>(null) }
@@ -129,6 +129,8 @@ fun BlocklistScreen(vm: WardenViewModel, onOpenAppPicker: () -> Unit) {
         }
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = onOpenAppPicker, modifier = Modifier.fillMaxWidth()) { Text("+ Add apps to block") }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onOpenFeatures, modifier = Modifier.fillMaxWidth()) { Text("Block in-app feeds (Reels, Shorts…)") }
         Spacer(Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(items, key = { it.id }) { item ->

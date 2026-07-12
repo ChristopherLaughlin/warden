@@ -57,6 +57,7 @@ class InterceptActivity : ComponentActivity() {
         val kind = intent.getStringExtra(EXTRA_KIND) ?: KIND_BLOCK
         val itemId = intent.getLongExtra(EXTRA_ITEM_ID, -1L)
         val reason = intent.getStringExtra(EXTRA_REASON)?.let { runCatching { LimitReason.valueOf(it) }.getOrNull() }
+        val featureLabel = intent.getStringExtra(EXTRA_FEATURE_LABEL)
 
         setContent {
             WardenTheme {
@@ -66,6 +67,7 @@ class InterceptActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val current = item
                     when {
+                        kind == KIND_FEATURE -> FeatureBlockScreen(featureLabel, ::goHome)
                         kind == KIND_PAUSE && current != null -> PauseScreen(
                             item = current,
                             onContinue = { minutes -> grantAndEnter(current, minutes) },
@@ -101,10 +103,21 @@ class InterceptActivity : ComponentActivity() {
         const val EXTRA_KIND = "kind"
         const val EXTRA_ITEM_ID = "item_id"
         const val EXTRA_REASON = "reason"
+        const val EXTRA_FEATURE_LABEL = "feature_label"
         const val KIND_PAUSE = "pause"
         const val KIND_BLOCK = "block"
         const val KIND_LIMIT = "limit"
+        const val KIND_FEATURE = "feature"
     }
+}
+
+@Composable
+private fun FeatureBlockScreen(featureLabel: String?, onHome: () -> Unit) {
+    CenteredMessage(
+        title = "${featureLabel ?: "That feed"} is off-limits",
+        body = "Warden is keeping you out of ${featureLabel ?: "this feed"}. The rest of the app still works — just not the endless scroll.",
+        onHome = onHome,
+    )
 }
 
 @Composable

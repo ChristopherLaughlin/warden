@@ -32,6 +32,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.warden.blocker.ui.AppPickerScreen
 import com.warden.blocker.ui.BlocklistScreen
+import com.warden.blocker.ui.FeaturesScreen
 import com.warden.blocker.ui.HomeScreen
 import com.warden.blocker.ui.SchedulesScreen
 import com.warden.blocker.ui.SettingsScreen
@@ -111,9 +112,14 @@ private fun WardenScaffold(vm: WardenViewModel, onToggleBlocking: (Boolean) -> U
         NavHost(navController, startDestination = Tab.HOME.route, modifier = Modifier.padding(padding)) {
             composable(Tab.HOME.route) { HomeScreen(vm, onToggleBlocking) }
             composable(Tab.BLOCKLIST.route) {
-                BlocklistScreen(vm, onOpenAppPicker = { navController.navigate("apppicker") })
+                BlocklistScreen(
+                    vm,
+                    onOpenAppPicker = { navController.navigate("apppicker") },
+                    onOpenFeatures = { navController.navigate("features") },
+                )
             }
             composable("apppicker") { AppPickerScreen(vm) }
+            composable("features") { FeaturesScreen(vm) }
             composable(Tab.SCHEDULES.route) { SchedulesScreen(vm) }
             composable(Tab.STATS.route) { StatsScreen(vm) }
             composable(Tab.SETTINGS.route) { SettingsScreen(vm) }

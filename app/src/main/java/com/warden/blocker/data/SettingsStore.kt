@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -28,6 +29,7 @@ class SettingsStore(private val context: Context) {
         val CURRENT_STREAK = intPreferencesKey("current_streak")
         val LONGEST_STREAK = intPreferencesKey("longest_streak")
         val LAST_ACTIVE_DAY = longPreferencesKey("last_active_day")
+        val ENABLED_FEATURES = stringSetPreferencesKey("enabled_features")
     }
 
     val masterEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.MASTER_ENABLED] ?: false }
@@ -36,6 +38,14 @@ class SettingsStore(private val context: Context) {
     val hasPin: Flow<Boolean> = context.dataStore.data.map { it[Keys.PIN_HASH] != null }
     val currentStreak: Flow<Int> = context.dataStore.data.map { it[Keys.CURRENT_STREAK] ?: 0 }
     val longestStreak: Flow<Int> = context.dataStore.data.map { it[Keys.LONGEST_STREAK] ?: 0 }
+    val enabledFeatureKeys: Flow<Set<String>> = context.dataStore.data.map { it[Keys.ENABLED_FEATURES] ?: emptySet() }
+
+    suspend fun setFeatureEnabled(key: String, enabled: Boolean) =
+        context.dataStore.edit { p ->
+            val current = (p[Keys.ENABLED_FEATURES] ?: emptySet()).toMutableSet()
+            if (enabled) current.add(key) else current.remove(key)
+            p[Keys.ENABLED_FEATURES] = current
+        }.let { }
 
     /**
      * Mark today as a protected day and update the focus streak. Called once per app open

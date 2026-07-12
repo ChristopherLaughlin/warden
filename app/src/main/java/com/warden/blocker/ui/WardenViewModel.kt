@@ -34,6 +34,13 @@ class WardenViewModel(app: Application) : AndroidViewModel(app) {
     val longestStreak: StateFlow<Int> =
         container.settings.longestStreak.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    val enabledFeatureKeys: StateFlow<Set<String>> =
+        container.settings.enabledFeatureKeys.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    fun setFeatureEnabled(key: String, enabled: Boolean) = viewModelScope.launch {
+        container.settings.setFeatureEnabled(key, enabled)
+    }
+
     /** Record a protected day for the focus streak, once per open while blocking is on. */
     fun onAppOpened() = viewModelScope.launch {
         if (container.settings.masterEnabled.first()) container.settings.recordActiveDay()
