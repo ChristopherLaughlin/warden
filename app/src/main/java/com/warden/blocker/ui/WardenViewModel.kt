@@ -28,6 +28,10 @@ class WardenViewModel(app: Application) : AndroidViewModel(app) {
         container.settings.masterEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val strictMode: StateFlow<Boolean> =
         container.settings.strictMode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val alwaysOn: StateFlow<Boolean> =
+        container.settings.alwaysOn.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setAlwaysOn(value: Boolean) = viewModelScope.launch { container.settings.setAlwaysOn(value) }
     val hasPin: StateFlow<Boolean> =
         container.settings.hasPin.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val currentStreak: StateFlow<Int> =

@@ -262,6 +262,7 @@ fun StatsScreen(vm: WardenViewModel) {
 fun SettingsScreen(vm: WardenViewModel) {
     val context = LocalContext.current
     val strict by vm.strictMode.collectAsStateWithLifecycle()
+    val alwaysOn by vm.alwaysOn.collectAsStateWithLifecycle()
     val hasPin by vm.hasPin.collectAsStateWithLifecycle()
 
     var unlocked by remember { mutableStateOf(false) }
@@ -292,6 +293,20 @@ fun SettingsScreen(vm: WardenViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+
+        // Blocking mode: always-on vs schedule-driven
+        Card(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Always on", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (alwaysOn) "Blocking is enforced whenever it's switched on." else "Blocking is enforced only during your schedules.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(checked = alwaysOn, onCheckedChange = { vm.setAlwaysOn(it) })
+            }
+        }
 
         // Strict mode
         Card(Modifier.fillMaxWidth()) {
