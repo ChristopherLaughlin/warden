@@ -37,6 +37,12 @@ class AppBlockAccessibilityService : AccessibilityService() {
     private var lastFeatureScan = 0L
     private var interceptedFeatureKey: String? = null
 
+    // Cache blocking-active + enabled features so scroll-heavy apps don't hammer DataStore/DB
+    // on every content-changed event. Refreshed at most once per CACHE_TTL_MS.
+    @Volatile private var cachedBlockingActive = false
+    @Volatile private var cachedFeatureKeys: Set<String> = emptySet()
+    @Volatile private var cacheStamp = 0L
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val type = event?.eventType ?: return
         val pkg = event.packageName?.toString() ?: return
@@ -76,10 +82,14 @@ class AppBlockAccessibilityService : AccessibilityService() {
         lastFeatureScan = now
 
         scope.launch {
-            val enabledKeys = wardenContainer.settings.enabledFeatureKeys.first()
-            val active = features.filter { it.key in enabledKeys }
+            if (now - cacheStamp > CACHE_TTL_MS) {
+                cachedBlockingActive = wardenContainer.blockEngine.isBlockingActiveNow()
+                cachedFeatureKeys = wardenContainer.settings.enabledFeatureKeys.first()
+                cacheStamp = now
+            }
+            if (!cachedBlockingActive) return@launch
+            val active = features.filter { it.key in cachedFeatureKeys }
             if (active.isEmpty()) return@launch
-            if (!wardenContainer.blockEngine.isBlockingActiveNow()) return@launch
 
             val hit = FeatureDetector.detect(active, A11yNode(rootInActiveWindow))
             if (hit == null) {
@@ -111,5 +121,6 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
     private companion object {
         const val SCAN_THROTTLE_MS = 400L
+        const val CACHE_TTL_MS = 2000L
     }
 }
