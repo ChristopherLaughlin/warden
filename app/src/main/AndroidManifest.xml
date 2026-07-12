@@ -81,6 +81,18 @@
             </intent-filter>
         </receiver>
 
+        <!-- Quick Settings tile: one-tap blocking toggle from the shade. -->
+        <service
+            android:name=".system.WardenTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_shield_tile"
+            android:label="Warden"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- Device admin: uninstall protection only (no enforcement policies declared). -->
         <receiver
             android:name=".system.WardenDeviceAdminReceiver"

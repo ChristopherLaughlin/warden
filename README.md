@@ -41,11 +41,14 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 - [x] **Focus streak** + screen-time dashboard ("track your wins")
 - [x] **In-app feed blocking** — block just Reels / Shorts / Explore / For You / Spotlight
       while the rest of the app keeps working (accessibility node detection)
+- [x] **Quick Settings tile** — one-tap blocking toggle from the shade (respects the PIN gate)
 - [x] Master on/off with VPN consent flow, restart-after-reboot
 
 **Roadmap (see `SPEC.md`):**
 - [ ] Conditions beyond time: Wi-Fi network, location, launch-count
-- [ ] Tune in-app feed detection signals against current app versions (needs real devices)
+- [ ] Pomodoro / timed focus sessions
+- [ ] Tune in-app feed detection signals against current app versions (needs real devices —
+      see [DEVICE_TESTING.md](DEVICE_TESTING.md))
 - [ ] Adult-content category blocking (curated domain lists)
 - [ ] Notification blocking for blocked apps during active windows
 - [ ] Quick-settings tile + Pomodoro focus sessions
