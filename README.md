@@ -41,6 +41,11 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 - [x] **Focus streak** + screen-time dashboard ("track your wins")
 - [x] **In-app feed blocking** — block just Reels / Shorts / Explore / For You / Spotlight
       while the rest of the app keeps working (accessibility node detection)
+- [x] **Protection-health indicator** — Home warns you (with one-tap re-arm) if the OS kills
+      the filter, so you're never *silently* unblocked (the #1 complaint about AppBlock & ScreenZen)
+- [x] **Never locks you out** — launcher, settings, dialer and Warden itself can't be blocked
+- [x] **Hardened security** — local-only DNS to *your* resolver, PBKDF2-310k PIN + lockout,
+      FLAG_SECURE + anti-tapjacking, no cleartext, no logging of domains. See [SECURITY.md](SECURITY.md)
 - [x] **Quick Settings tile** — one-tap blocking toggle from the shade (respects the PIN gate)
 - [x] **Focus sessions** — a Pomodoro-style timer that forces blocking on for a set duration
       (optional strict mode with no early exit), independent of the master switch
@@ -73,6 +78,9 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 | Focus / Pomodoro sessions | — | ✓ | ✓ |
 | Notification blocking | ✓ | — | ✓ |
 | Encrypted-DNS (DoH) blocking | — | — | ✓ |
+| Warns when enforcement stops | — | — | ✓ |
+| Can't accidentally lock you out | — | — | ✓ |
+| Open-source & auditable | — | — | ✓ |
 | PIN lock | ✓ | — | ✓ |
 | Streaks | — | ✓ | ✓ |
 | Price | freemium | free | **free + open-source** |
