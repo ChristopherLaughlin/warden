@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Warden</string>
+    <string name="accessibility_label">Warden App Blocker</string>
+    <string name="accessibility_description">Warden uses accessibility to detect when a blocked app or website is opened so it can show the block screen. Warden never collects, stores, or transmits the content of your screen.</string>
+    <string name="vpn_notification_channel">Blocking active</string>
+    <string name="vpn_notification_title">Warden is protecting your focus</string>
+    <string name="vpn_notification_text">Blocked sites are being filtered.</string>
+</resources>
