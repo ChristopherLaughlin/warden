@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +58,7 @@ import com.warden.blocker.data.Schedule
 import com.warden.blocker.system.AdminManager
 import com.warden.blocker.usage.UsageStatsHelper
 import com.warden.blocker.util.PermissionsHelper
+import com.warden.blocker.vpn.WardenVpnService
 import java.util.concurrent.TimeUnit
 
 @Composable
@@ -88,6 +90,18 @@ fun HomeScreen(
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Finish setup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("Grant accessibility so Warden can block apps and feeds. Tap to fix.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        } else if (enabled && !WardenVpnService.running) {
+            // Blocking is on but the filter isn't running (OS killed it). Never leave the user
+            // silently unprotected — surface it and offer a one-tap re-arm.
+            ElevatedCard(
+                Modifier.fillMaxWidth().clickable { onToggleBlocking(true) },
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("⚠ Protection paused", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Blocking is on but the filter isn't running — your phone may have stopped it. Tap to restart.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

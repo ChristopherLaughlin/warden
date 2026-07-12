@@ -10,6 +10,7 @@ import com.warden.blocker.feature.AppFeature
 import com.warden.blocker.feature.FeatureCatalog
 import com.warden.blocker.feature.FeatureDetector
 import com.warden.blocker.ui.intercept.InterceptActivity
+import com.warden.blocker.util.CriticalApps
 import com.warden.blocker.wardenContainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +63,8 @@ class AppBlockAccessibilityService : AccessibilityService() {
     private fun handleAppBlock(pkg: String) {
         if (pkg == lastPackage) return
         lastPackage = pkg
+        // Never lock the user out of their own phone (launcher, settings, dialer, us).
+        if (CriticalApps.isCritical(this, pkg)) { interceptedFeatureKey = null; return }
         interceptedFeatureKey = null // new app in front; allow feature re-detection
         scope.launch {
             when (val decision = wardenContainer.accessController.decideForPackage(pkg)) {

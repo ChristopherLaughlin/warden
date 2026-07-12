@@ -73,6 +73,7 @@ class WardenVpnService : VpnService() {
             stopSelf(); return
         }
 
+        running = true
         loopJob = scope.launch {
             refreshBlocklist()
             runPacketLoop(tunnel!!)
@@ -192,6 +193,7 @@ class WardenVpnService : VpnService() {
     }
 
     private fun stopTunnel() {
+        running = false
         loopJob?.cancel()
         runCatching { tunnel?.close() }
         tunnel = null
@@ -212,12 +214,18 @@ class WardenVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        running = false
         scope.cancel()
         runCatching { tunnel?.close() }
         super.onDestroy()
     }
 
     companion object {
+        /** Whether the filtering tunnel is currently up — read by the Home health indicator so
+         *  users are never *silently* unblocked when the OS kills the service. */
+        @Volatile var running = false
+            private set
+
         private const val TAG = "WardenVpn"
         const val ACTION_START = "com.warden.blocker.VPN_START"
         const val ACTION_STOP = "com.warden.blocker.VPN_STOP"

@@ -18,7 +18,7 @@ object AppsHelper {
         return resolved
             .asSequence()
             .map { it.activityInfo.packageName }
-            .filter { it != context.packageName }
+            .filterNot { com.warden.blocker.util.CriticalApps.isCritical(context, it) }
             .distinct()
             .map { pkg ->
                 val label = runCatching {
