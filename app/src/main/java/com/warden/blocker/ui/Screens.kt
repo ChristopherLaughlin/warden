@@ -275,6 +275,7 @@ fun SettingsScreen(vm: WardenViewModel, onOpenSetup: () -> Unit) {
     val context = LocalContext.current
     val strict by vm.strictMode.collectAsStateWithLifecycle()
     val alwaysOn by vm.alwaysOn.collectAsStateWithLifecycle()
+    val blockDoh by vm.blockDoh.collectAsStateWithLifecycle()
     val hasPin by vm.hasPin.collectAsStateWithLifecycle()
 
     var unlocked by remember { mutableStateOf(false) }
@@ -331,6 +332,17 @@ fun SettingsScreen(vm: WardenViewModel, onOpenSetup: () -> Unit) {
                     vm.setStrictMode(on)
                     if (on && !adminActive) adminLauncher.launch(AdminManager.enableIntent(context))
                 })
+            }
+        }
+
+        // Close the DNS-over-HTTPS bypass
+        Card(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Block DNS-over-HTTPS", style = MaterialTheme.typography.titleMedium)
+                    Text("Also blocks encrypted-DNS resolvers so browsers can't bypass website filtering. Applies next time blocking starts.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = blockDoh, onCheckedChange = { vm.setBlockDoh(it) })
             }
         }
 

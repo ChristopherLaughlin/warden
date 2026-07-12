@@ -24,6 +24,10 @@ class BlockEngine(
         return ScheduleEvaluator.anyActive(repo.enabledSchedules(), now)
     }
 
-    suspend fun blockedDomains(): List<String> =
-        if (isBlockingActiveNow()) repo.enabledDomains() else emptyList()
+    suspend fun blockedDomains(): List<String> {
+        if (!isBlockingActiveNow()) return emptyList()
+        val domains = repo.enabledDomains().toMutableList()
+        if (settings.blockDoh.first()) domains += DohHosts.ALL
+        return domains
+    }
 }
