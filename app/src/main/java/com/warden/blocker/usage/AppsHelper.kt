@@ -30,6 +30,12 @@ object AppsHelper {
             .toList()
     }
 
+    /** Human-readable app name for a package, falling back to the package name. */
+    fun labelFor(context: Context, packageName: String): String = runCatching {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+    }.getOrDefault(packageName)
+
     /** Loads an app's launcher icon as an ImageBitmap (null if the package is gone). */
     fun loadIcon(context: Context, packageName: String): ImageBitmap? = runCatching {
         context.packageManager.getApplicationIcon(packageName).toBitmap(96, 96).asImageBitmap()

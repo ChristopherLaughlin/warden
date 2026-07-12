@@ -37,9 +37,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.warden.blocker.usage.AppsHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -159,6 +163,9 @@ fun BlocklistScreen(vm: WardenViewModel, onOpenAppPicker: () -> Unit, onOpenFeat
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = onOpenFeatures, modifier = Modifier.fillMaxWidth()) { Text("Block in-app feeds (Reels, Shorts…)") }
         Spacer(Modifier.height(16.dp))
+        if (items.isEmpty()) {
+            Text("Nothing blocked yet — add a website above or tap “Add apps”.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(items, key = { it.id }) { item ->
                 Card(Modifier.fillMaxWidth().clickable { editing = item }) {
@@ -214,6 +221,9 @@ fun SchedulesScreen(vm: WardenViewModel) {
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("+ New schedule") }
         Spacer(Modifier.height(16.dp))
+        if (schedules.isEmpty()) {
+            Text("No schedules yet. Add one, then turn off “Always on” in Settings to use them.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(schedules, key = { it.id }) { s ->
                 Card(Modifier.fillMaxWidth().clickable { editing = s }) {
@@ -238,18 +248,22 @@ fun SchedulesScreen(vm: WardenViewModel) {
     }
 }
 
+private data class UsageRow(val pkg: String, val label: String, val millis: Long)
+
 @Composable
 fun StatsScreen(vm: WardenViewModel) {
     val context = LocalContext.current
     val hasPermission = remember { UsageStatsHelper.hasPermission(context) }
     val streak by vm.currentStreak.collectAsStateWithLifecycle()
     val longest by vm.longestStreak.collectAsStateWithLifecycle()
+    val sessions by vm.focusSessionsDone.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text("Your wins", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard("Current streak", "$streak d", Modifier.weight(1f))
-            StatCard("Longest streak", "$longest d", Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StatCard("Streak", "$streak d", Modifier.weight(1f))
+            StatCard("Best", "$longest d", Modifier.weight(1f))
+            StatCard("Sessions", "$sessions", Modifier.weight(1f))
         }
         Spacer(Modifier.height(20.dp))
         Text("Screen time today", style = MaterialTheme.typography.titleMedium)
@@ -261,14 +275,25 @@ fun StatsScreen(vm: WardenViewModel) {
                 Text("Grant usage access")
             }
         } else {
-            val usage = remember { UsageStatsHelper.todayUsage(context).take(25) }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(usage, key = { it.packageName }) { u ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(u.packageName, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        Text(fmtDuration(u.totalMillis), style = MaterialTheme.typography.bodyMedium)
+            val rows by produceState<List<UsageRow>?>(initialValue = null) {
+                value = withContext(Dispatchers.Default) {
+                    UsageStatsHelper.todayUsage(context).take(25)
+                        .map { UsageRow(it.packageName, AppsHelper.labelFor(context, it.packageName), it.totalMillis) }
+                }
+            }
+            val list = rows
+            if (list != null && list.isEmpty()) {
+                Text("No screen time recorded yet today.", style = MaterialTheme.typography.bodyMedium)
+            } else if (list != null) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(list, key = { it.pkg }) { u ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(u.pkg, modifier = Modifier.size(32.dp).padding(end = 12.dp))
+                            Text(u.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Text(fmtDuration(u.millis), style = MaterialTheme.typography.bodyMedium)
+                        }
+                        HorizontalDivider()
                     }
-                    HorizontalDivider()
                 }
             }
         }

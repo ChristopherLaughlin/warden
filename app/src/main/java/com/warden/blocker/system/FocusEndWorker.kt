@@ -21,6 +21,7 @@ class FocusEndWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val endsAt = container.settings.focusEndsAt.first()
         if (endsAt != 0L && endsAt <= System.currentTimeMillis()) {
             container.settings.clearFocus()
+            container.settings.incrementFocusSessions() // count only sessions that ran to completion
         }
         if (!container.blockEngine.isBlockingActiveNow()) {
             VpnController.stop(applicationContext)

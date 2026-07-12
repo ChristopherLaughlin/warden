@@ -34,6 +34,7 @@ class SettingsStore(private val context: Context) {
         val FOCUS_STRICT = booleanPreferencesKey("focus_strict")
         val BLOCK_DOH = booleanPreferencesKey("block_doh")
         val BLOCK_NOTIFICATIONS = booleanPreferencesKey("block_notifications")
+        val FOCUS_SESSIONS_DONE = intPreferencesKey("focus_sessions_done")
     }
 
     val masterEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.MASTER_ENABLED] ?: false }
@@ -61,6 +62,11 @@ class SettingsStore(private val context: Context) {
 
     suspend fun clearFocus() =
         context.dataStore.edit { it.remove(Keys.FOCUS_ENDS_AT); it.remove(Keys.FOCUS_STRICT) }.let { }
+
+    val focusSessionsDone: Flow<Int> = context.dataStore.data.map { it[Keys.FOCUS_SESSIONS_DONE] ?: 0 }
+
+    suspend fun incrementFocusSessions() =
+        context.dataStore.edit { it[Keys.FOCUS_SESSIONS_DONE] = (it[Keys.FOCUS_SESSIONS_DONE] ?: 0) + 1 }.let { }
 
     suspend fun setFeatureEnabled(key: String, enabled: Boolean) =
         context.dataStore.edit { p ->

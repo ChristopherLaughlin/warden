@@ -48,6 +48,8 @@ class WardenViewModel(app: Application) : AndroidViewModel(app) {
         container.settings.currentStreak.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val longestStreak: StateFlow<Int> =
         container.settings.longestStreak.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val focusSessionsDone: StateFlow<Int> =
+        container.settings.focusSessionsDone.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val enabledFeatureKeys: StateFlow<Set<String>> =
         container.settings.enabledFeatureKeys.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
