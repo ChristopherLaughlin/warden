@@ -33,15 +33,20 @@ class SettingsStore(private val context: Context) {
         val FOCUS_ENDS_AT = longPreferencesKey("focus_ends_at")
         val FOCUS_STRICT = booleanPreferencesKey("focus_strict")
         val BLOCK_DOH = booleanPreferencesKey("block_doh")
+        val BLOCK_NOTIFICATIONS = booleanPreferencesKey("block_notifications")
     }
 
     val masterEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.MASTER_ENABLED] ?: false }
     val alwaysOn: Flow<Boolean> = context.dataStore.data.map { it[Keys.ALWAYS_ON] ?: true }
     val strictMode: Flow<Boolean> = context.dataStore.data.map { it[Keys.STRICT_MODE] ?: false }
     val blockDoh: Flow<Boolean> = context.dataStore.data.map { it[Keys.BLOCK_DOH] ?: false }
+    val blockNotifications: Flow<Boolean> = context.dataStore.data.map { it[Keys.BLOCK_NOTIFICATIONS] ?: false }
 
     suspend fun setBlockDoh(value: Boolean) =
         context.dataStore.edit { it[Keys.BLOCK_DOH] = value }.let { }
+
+    suspend fun setBlockNotifications(value: Boolean) =
+        context.dataStore.edit { it[Keys.BLOCK_NOTIFICATIONS] = value }.let { }
     val hasPin: Flow<Boolean> = context.dataStore.data.map { it[Keys.PIN_HASH] != null }
     val currentStreak: Flow<Int> = context.dataStore.data.map { it[Keys.CURRENT_STREAK] ?: 0 }
     val longestStreak: Flow<Int> = context.dataStore.data.map { it[Keys.LONGEST_STREAK] ?: 0 }

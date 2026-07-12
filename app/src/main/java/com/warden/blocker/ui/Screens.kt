@@ -276,6 +276,7 @@ fun SettingsScreen(vm: WardenViewModel, onOpenSetup: () -> Unit) {
     val strict by vm.strictMode.collectAsStateWithLifecycle()
     val alwaysOn by vm.alwaysOn.collectAsStateWithLifecycle()
     val blockDoh by vm.blockDoh.collectAsStateWithLifecycle()
+    val blockNotifications by vm.blockNotifications.collectAsStateWithLifecycle()
     val hasPin by vm.hasPin.collectAsStateWithLifecycle()
 
     var unlocked by remember { mutableStateOf(false) }
@@ -343,6 +344,25 @@ fun SettingsScreen(vm: WardenViewModel, onOpenSetup: () -> Unit) {
                     Text("Also blocks encrypted-DNS resolvers so browsers can't bypass website filtering. Applies next time blocking starts.", style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(checked = blockDoh, onCheckedChange = { vm.setBlockDoh(it) })
+            }
+        }
+
+        // Notification blocking
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Block notifications", style = MaterialTheme.typography.titleMedium)
+                        Text("Silences notifications from blocked apps while blocking is active.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = blockNotifications, onCheckedChange = { vm.setBlockNotifications(it) })
+                }
+                if (blockNotifications) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) {
+                        Text("Grant notification access")
+                    }
+                }
             }
         }
 

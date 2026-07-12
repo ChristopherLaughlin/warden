@@ -37,6 +37,11 @@ class WardenViewModel(app: Application) : AndroidViewModel(app) {
         container.settings.blockDoh.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun setBlockDoh(value: Boolean) = viewModelScope.launch { container.settings.setBlockDoh(value) }
+
+    val blockNotifications: StateFlow<Boolean> =
+        container.settings.blockNotifications.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setBlockNotifications(value: Boolean) = viewModelScope.launch { container.settings.setBlockNotifications(value) }
     val hasPin: StateFlow<Boolean> =
         container.settings.hasPin.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val currentStreak: StateFlow<Int> =

@@ -81,6 +81,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Cancels notifications from blocked apps (opt-in; needs notification access). -->
+        <service
+            android:name=".system.WardenNotificationListener"
+            android:exported="true"
+            android:label="Warden"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Quick Settings tile: one-tap blocking toggle from the shade. -->
         <service
             android:name=".system.WardenTileService"
