@@ -3,11 +3,14 @@ package com.warden.blocker.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 
 private val Context.dataStore by preferencesDataStore(name = "warden_settings")
 
@@ -22,12 +25,34 @@ class SettingsStore(private val context: Context) {
         val STRICT_MODE = booleanPreferencesKey("strict_mode")
         val PIN_HASH = stringPreferencesKey("pin_hash")
         val PIN_SALT = stringPreferencesKey("pin_salt")
+        val CURRENT_STREAK = intPreferencesKey("current_streak")
+        val LONGEST_STREAK = intPreferencesKey("longest_streak")
+        val LAST_ACTIVE_DAY = longPreferencesKey("last_active_day")
     }
 
     val masterEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.MASTER_ENABLED] ?: false }
     val alwaysOn: Flow<Boolean> = context.dataStore.data.map { it[Keys.ALWAYS_ON] ?: true }
     val strictMode: Flow<Boolean> = context.dataStore.data.map { it[Keys.STRICT_MODE] ?: false }
     val hasPin: Flow<Boolean> = context.dataStore.data.map { it[Keys.PIN_HASH] != null }
+    val currentStreak: Flow<Int> = context.dataStore.data.map { it[Keys.CURRENT_STREAK] ?: 0 }
+    val longestStreak: Flow<Int> = context.dataStore.data.map { it[Keys.LONGEST_STREAK] ?: 0 }
+
+    /**
+     * Mark today as a protected day and update the focus streak. Called once per app open
+     * while blocking is enabled. A gap of more than a day resets the streak to 1.
+     */
+    suspend fun recordActiveDay() {
+        val today = LocalDate.now().toEpochDay()
+        context.dataStore.edit { p ->
+            val last = p[Keys.LAST_ACTIVE_DAY] ?: -1L
+            if (last == today) return@edit
+            val current = p[Keys.CURRENT_STREAK] ?: 0
+            val next = if (last == today - 1) current + 1 else 1
+            p[Keys.CURRENT_STREAK] = next
+            p[Keys.LONGEST_STREAK] = maxOf(p[Keys.LONGEST_STREAK] ?: 0, next)
+            p[Keys.LAST_ACTIVE_DAY] = today
+        }
+    }
 
     suspend fun setMasterEnabled(value: Boolean) =
         context.dataStore.edit { it[Keys.MASTER_ENABLED] = value }.let { }
@@ -42,6 +67,12 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit {
             it[Keys.PIN_HASH] = hash
             it[Keys.PIN_SALT] = salt
+        }.let { }
+
+    suspend fun clearPin() =
+        context.dataStore.edit {
+            it.remove(Keys.PIN_HASH)
+            it.remove(Keys.PIN_SALT)
         }.let { }
 
     /** Returns (hash, salt) or null if no PIN configured. */

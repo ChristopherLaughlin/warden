@@ -19,6 +19,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -29,6 +30,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.warden.blocker.ui.AppPickerScreen
 import com.warden.blocker.ui.BlocklistScreen
 import com.warden.blocker.ui.HomeScreen
 import com.warden.blocker.ui.SchedulesScreen
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             WardenTheme {
                 val vm: WardenViewModel = viewModel()
+                LaunchedEffect(Unit) { vm.onAppOpened() }
 
                 val consentLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
@@ -107,9 +110,12 @@ private fun WardenScaffold(vm: WardenViewModel, onToggleBlocking: (Boolean) -> U
     ) { padding ->
         NavHost(navController, startDestination = Tab.HOME.route, modifier = Modifier.padding(padding)) {
             composable(Tab.HOME.route) { HomeScreen(vm, onToggleBlocking) }
-            composable(Tab.BLOCKLIST.route) { BlocklistScreen(vm) }
+            composable(Tab.BLOCKLIST.route) {
+                BlocklistScreen(vm, onOpenAppPicker = { navController.navigate("apppicker") })
+            }
+            composable("apppicker") { AppPickerScreen(vm) }
             composable(Tab.SCHEDULES.route) { SchedulesScreen(vm) }
-            composable(Tab.STATS.route) { StatsScreen() }
+            composable(Tab.STATS.route) { StatsScreen(vm) }
             composable(Tab.SETTINGS.route) { SettingsScreen(vm) }
         }
     }

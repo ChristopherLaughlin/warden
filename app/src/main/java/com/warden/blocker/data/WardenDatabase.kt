@@ -10,11 +10,13 @@ import androidx.room.RoomDatabase
 class Converters {
     @TypeConverter fun toBlockType(value: String): BlockType = BlockType.valueOf(value)
     @TypeConverter fun fromBlockType(type: BlockType): String = type.name
+    @TypeConverter fun toInterceptMode(value: String): InterceptMode = InterceptMode.valueOf(value)
+    @TypeConverter fun fromInterceptMode(mode: InterceptMode): String = mode.name
 }
 
 @Database(
-    entities = [BlockedItem::class, Schedule::class],
-    version = 1,
+    entities = [BlockedItem::class, Schedule::class, AccessGrant::class],
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -30,7 +32,12 @@ abstract class WardenDatabase : RoomDatabase() {
                     context.applicationContext,
                     WardenDatabase::class.java,
                     "warden.db",
-                ).build().also { instance = it }
+                )
+                    // Pre-release: schema is still moving. Replace with real migrations
+                    // before the first public release (see SPEC.md).
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { instance = it }
             }
     }
 }

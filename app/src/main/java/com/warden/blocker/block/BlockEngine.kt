@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.first
 import java.util.Calendar
 
 /**
- * Central authority answering "is blocking enforced right now, and for what?".
- * Consulted by the VPN (domains) and the accessibility service (packages).
+ * Answers "is blocking enforced right now?" from the master switch + schedules. The VPN
+ * asks it for [blockedDomains]; per-app decisions go through [AccessController].
  */
 class BlockEngine(
     private val repo: BlockRepository,
@@ -22,7 +22,4 @@ class BlockEngine(
 
     suspend fun blockedDomains(): List<String> =
         if (isBlockingActiveNow()) repo.enabledDomains() else emptyList()
-
-    suspend fun isPackageBlockedNow(packageName: String): Boolean =
-        isBlockingActiveNow() && repo.enabledPackages().contains(packageName)
 }

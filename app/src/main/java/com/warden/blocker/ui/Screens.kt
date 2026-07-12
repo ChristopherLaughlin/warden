@@ -2,6 +2,11 @@ package com.warden.blocker.ui
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,15 +44,20 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.warden.blocker.data.BlockType
 import com.warden.blocker.data.BlockedItem
+import com.warden.blocker.data.InterceptMode
 import com.warden.blocker.data.Schedule
+import com.warden.blocker.system.AdminManager
 import com.warden.blocker.usage.UsageStatsHelper
 import java.util.concurrent.TimeUnit
 
 @Composable
 fun HomeScreen(vm: WardenViewModel, onToggleBlocking: (Boolean) -> Unit) {
     val enabled by vm.masterEnabled.collectAsStateWithLifecycle()
+    val hasPin by vm.hasPin.collectAsStateWithLifecycle()
+    val streak by vm.currentStreak.collectAsStateWithLifecycle()
     val items by vm.items.collectAsStateWithLifecycle()
     val activeCount = items.count { it.enabled }
+    var showVerify by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Warden", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -58,7 +68,13 @@ fun HomeScreen(vm: WardenViewModel, onToggleBlocking: (Boolean) -> Unit) {
                         Text(if (enabled) "Blocking is ON" else "Blocking is OFF", style = MaterialTheme.typography.titleLarge)
                         Text("$activeCount item(s) protected", style = MaterialTheme.typography.bodyMedium)
                     }
-                    Switch(checked = enabled, onCheckedChange = onToggleBlocking)
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { turnOn ->
+                            // Disabling while a PIN is set requires the PIN (strict-mode friction).
+                            if (!turnOn && hasPin) showVerify = true else onToggleBlocking(turnOn)
+                        },
+                    )
                 }
                 Text(
                     "Turning this on starts a local, private VPN that filters DNS on-device. " +
@@ -67,14 +83,36 @@ fun HomeScreen(vm: WardenViewModel, onToggleBlocking: (Boolean) -> Unit) {
                 )
             }
         }
+        if (streak > 0) {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("🔥", style = MaterialTheme.typography.headlineMedium)
+                    Spacer(Modifier.height(0.dp))
+                    Column(Modifier.padding(start = 16.dp)) {
+                        Text("$streak-day focus streak", style = MaterialTheme.typography.titleLarge)
+                        Text("Keep Warden on each day to grow it.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
         Text("Add sites and apps in Blocklist, or set times in Schedules.", style = MaterialTheme.typography.bodyMedium)
+    }
+
+    if (showVerify) {
+        VerifyPinDialog(
+            title = "Enter PIN to stop blocking",
+            verify = vm::verifyPin,
+            onSuccess = { showVerify = false; onToggleBlocking(false) },
+            onDismiss = { showVerify = false },
+        )
     }
 }
 
 @Composable
-fun BlocklistScreen(vm: WardenViewModel) {
+fun BlocklistScreen(vm: WardenViewModel, onOpenAppPicker: () -> Unit) {
     val items by vm.items.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
+    var editing by remember { mutableStateOf<BlockedItem?>(null) }
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text("Blocklist", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -87,17 +125,18 @@ fun BlocklistScreen(vm: WardenViewModel) {
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.height(8.dp))
             Button(onClick = { vm.addWebsite(input); input = "" }, modifier = Modifier.padding(start = 8.dp)) { Text("Add") }
         }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onOpenAppPicker, modifier = Modifier.fillMaxWidth()) { Text("+ Add apps to block") }
         Spacer(Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(items, key = { it.id }) { item ->
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth().clickable { editing = item }) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(item.label, style = MaterialTheme.typography.titleMedium)
-                            Text(if (item.type == BlockType.WEBSITE) "Website" else "App", style = MaterialTheme.typography.bodySmall)
+                            Text(itemSummary(item), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                         }
                         Switch(checked = item.enabled, onCheckedChange = { vm.toggleItem(item) })
                         IconButton(onClick = { vm.removeItem(item) }) { Icon(Icons.Filled.Delete, contentDescription = "Remove") }
@@ -106,46 +145,81 @@ fun BlocklistScreen(vm: WardenViewModel) {
             }
         }
     }
+
+    editing?.let { current ->
+        ItemEditorSheet(
+            item = current,
+            onSave = { vm.saveItem(it) },
+            onDismiss = { editing = null },
+        )
+    }
+}
+
+private fun itemSummary(item: BlockedItem): String {
+    if (item.type == BlockType.WEBSITE) return "Website · hard block"
+    return when (item.interceptMode) {
+        InterceptMode.BLOCK -> "App · hard block"
+        InterceptMode.PAUSE -> buildString {
+            append("App · pause ${item.pauseSeconds}s")
+            if (item.openLimitPerDay > 0) append(" · ${item.openLimitPerDay}/day")
+            if (item.dailyLimitMinutes > 0) append(" · ${item.dailyLimitMinutes}m limit")
+        }
+    }
 }
 
 @Composable
 fun SchedulesScreen(vm: WardenViewModel) {
     val schedules by vm.schedules.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf<Schedule?>(null) }
+    var creating by remember { mutableStateOf(false) }
+
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text("Schedules", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text("When enabled with 'always-on' off, the blocklist is only enforced during these windows.", style = MaterialTheme.typography.bodyMedium)
+        Text("With 'always-on' off, the blocklist is only enforced during these windows.", style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(12.dp))
-        // v1: quick-add a weekday focus window (9:00–17:00). Full editor is a follow-up.
-        OutlinedButton(onClick = {
-            vm.addSchedule(
-                Schedule(name = "Work focus", daysMask = 0b0011111, startMinute = 9 * 60, endMinute = 17 * 60),
-            )
-        }) { Text("+ Add weekday 9–5 focus window") }
+        OutlinedButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("+ New schedule") }
         Spacer(Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(schedules, key = { it.id }) { s ->
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth().clickable { editing = s }) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(s.name, style = MaterialTheme.typography.titleMedium)
                             Text("${fmt(s.startMinute)}–${fmt(s.endMinute)}  •  ${daysLabel(s.daysMask)}", style = MaterialTheme.typography.bodySmall)
                         }
+                        Switch(checked = s.enabled, onCheckedChange = { vm.addSchedule(s.copy(enabled = it)) })
                         IconButton(onClick = { vm.removeSchedule(s) }) { Icon(Icons.Filled.Delete, contentDescription = "Remove") }
                     }
                 }
             }
         }
     }
+
+    if (creating) {
+        ScheduleEditorDialog(initial = null, onSave = { vm.addSchedule(it) }, onDismiss = { creating = false })
+    }
+    editing?.let { current ->
+        ScheduleEditorDialog(initial = current, onSave = { vm.addSchedule(it) }, onDismiss = { editing = null })
+    }
 }
 
 @Composable
-fun StatsScreen() {
+fun StatsScreen(vm: WardenViewModel) {
     val context = LocalContext.current
     val hasPermission = remember { UsageStatsHelper.hasPermission(context) }
+    val streak by vm.currentStreak.collectAsStateWithLifecycle()
+    val longest by vm.longestStreak.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Text("Usage today", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("Your wins", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatCard("Current streak", "$streak d", Modifier.weight(1f))
+            StatCard("Longest streak", "$longest d", Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Screen time today", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
         if (!hasPermission) {
             Text("Grant usage access to see screen-time.", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
@@ -172,19 +246,85 @@ fun StatsScreen() {
 fun SettingsScreen(vm: WardenViewModel) {
     val context = LocalContext.current
     val strict by vm.strictMode.collectAsStateWithLifecycle()
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val hasPin by vm.hasPin.collectAsStateWithLifecycle()
+
+    var unlocked by remember { mutableStateOf(false) }
+    var showUnlock by remember { mutableStateOf(false) }
+    var showSetPin by remember { mutableStateOf(false) }
+    var showRemovePin by remember { mutableStateOf(false) }
+    var adminActive by remember { mutableStateOf(AdminManager.isActive(context)) }
+
+    val adminLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        adminActive = AdminManager.isActive(context)
+    }
+
+    // PIN gate: settings are locked until the PIN is entered.
+    if (hasPin && !unlocked) {
+        Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Settings are locked", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { showUnlock = true }) { Text("Unlock with PIN") }
+        }
+        if (showUnlock) {
+            VerifyPinDialog("Enter PIN", vm::verifyPin, onSuccess = { unlocked = true; showUnlock = false }, onDismiss = { showUnlock = false })
+        }
+        return
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
+        // Strict mode
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Strict mode", style = MaterialTheme.typography.titleMedium)
-                    Text("Prevents turning blocking off or uninstalling while active.", style = MaterialTheme.typography.bodySmall)
+                    Text("Locks the master switch while a block is active. Pair with a PIN + uninstall protection.", style = MaterialTheme.typography.bodySmall)
                 }
-                Switch(checked = strict, onCheckedChange = { vm.setStrictMode(it) })
+                Switch(checked = strict, onCheckedChange = { on ->
+                    vm.setStrictMode(on)
+                    if (on && !adminActive) adminLauncher.launch(AdminManager.enableIntent(context))
+                })
             }
         }
 
+        // Uninstall protection (device admin)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("Uninstall protection", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (adminActive) "On — Warden can't be uninstalled until you turn this off." else "Off — Warden can be uninstalled anytime.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(8.dp))
+                if (adminActive) {
+                    OutlinedButton(
+                        onClick = { if (!strict) { AdminManager.disable(context); adminActive = AdminManager.isActive(context) } },
+                        enabled = !strict,
+                    ) { Text(if (strict) "Turn off strict mode first" else "Turn off protection") }
+                } else {
+                    Button(onClick = { adminLauncher.launch(AdminManager.enableIntent(context)) }) { Text("Turn on protection") }
+                }
+            }
+        }
+
+        // PIN
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("PIN lock", style = MaterialTheme.typography.titleMedium)
+                Text(if (hasPin) "A PIN is required to change settings or stop blocking." else "Protect settings and disabling with a 4-digit PIN.", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { showSetPin = true }) { Text(if (hasPin) "Change PIN" else "Set PIN") }
+                    if (hasPin) OutlinedButton(onClick = { showRemovePin = true }) { Text("Remove PIN") }
+                }
+            }
+        }
+
+        HorizontalDivider()
         Text("Permissions", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) {
             Text("App-blocking (Accessibility)")
@@ -192,9 +332,23 @@ fun SettingsScreen(vm: WardenViewModel) {
         OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) {
             Text("Usage access (screen-time)")
         }
+    }
 
-        Spacer(Modifier.height(8.dp))
-        Text("PIN protection and full schedule editing are on the roadmap.", style = MaterialTheme.typography.bodySmall)
+    if (showSetPin) {
+        SetPinDialog(onDone = { vm.setPin(it) }, onDismiss = { showSetPin = false })
+    }
+    if (showRemovePin) {
+        VerifyPinDialog("Enter PIN to remove", vm::verifyPin, onSuccess = { vm.clearPin(); showRemovePin = false }, onDismiss = { showRemovePin = false })
+    }
+}
+
+@Composable
+private fun StatCard(label: String, value: String, modifier: Modifier = Modifier) {
+    ElevatedCard(modifier) {
+        Column(Modifier.padding(16.dp)) {
+            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 

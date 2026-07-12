@@ -18,6 +18,12 @@ interface BlockDao {
     @Query("SELECT * FROM blocked_items WHERE type = :type AND enabled = 1")
     suspend fun enabledItemsOfType(type: BlockType): List<BlockedItem>
 
+    @Query("SELECT * FROM blocked_items WHERE type = :type AND value = :value LIMIT 1")
+    suspend fun itemByValue(type: BlockType, value: String): BlockedItem?
+
+    @Query("SELECT * FROM blocked_items WHERE id = :id LIMIT 1")
+    suspend fun itemById(id: Long): BlockedItem?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertItem(item: BlockedItem): Long
 
@@ -39,4 +45,20 @@ interface BlockDao {
 
     @Delete
     suspend fun deleteSchedule(schedule: Schedule)
+
+    // --- Access grants (temporary passes / open counting / cooldown) ---
+    @Insert
+    suspend fun insertGrant(grant: AccessGrant): Long
+
+    @Query("SELECT * FROM access_grants WHERE itemId = :itemId AND expiresAt > :now ORDER BY expiresAt DESC LIMIT 1")
+    suspend fun activeGrant(itemId: Long, now: Long): AccessGrant?
+
+    @Query("SELECT COUNT(*) FROM access_grants WHERE itemId = :itemId AND grantedAt >= :sinceMillis")
+    suspend fun grantCountSince(itemId: Long, sinceMillis: Long): Int
+
+    @Query("SELECT MAX(grantedAt) FROM access_grants WHERE itemId = :itemId")
+    suspend fun lastGrantAt(itemId: Long): Long?
+
+    @Query("DELETE FROM access_grants WHERE grantedAt < :beforeMillis")
+    suspend fun pruneGrantsBefore(beforeMillis: Long)
 }

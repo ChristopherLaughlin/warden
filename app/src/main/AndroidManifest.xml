@@ -32,9 +32,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Full-screen block screen shown when a blocked app/site is opened. -->
+        <!-- Full-screen intercept shown when a blocked app is opened: hard block,
+             limit-reached notice, or the mindful pause. -->
         <activity
-            android:name=".ui.block.BlockedActivity"
+            android:name=".ui.intercept.InterceptActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTask"
@@ -75,6 +76,20 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Device admin: uninstall protection only (no enforcement policies declared). -->
+        <receiver
+            android:name=".system.WardenDeviceAdminReceiver"
+            android:description="@string/device_admin_description"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
     </application>

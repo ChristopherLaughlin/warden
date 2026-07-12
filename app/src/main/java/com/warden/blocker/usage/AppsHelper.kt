@@ -1,0 +1,29 @@
+package com.warden.blocker.usage
+
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+
+data class InstalledApp(val packageName: String, val label: String)
+
+/** Lists user-launchable apps for the block-app picker. */
+object AppsHelper {
+    fun launchableApps(context: Context): List<InstalledApp> {
+        val pm = context.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val resolved = pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+        return resolved
+            .asSequence()
+            .map { it.activityInfo.packageName }
+            .filter { it != context.packageName }
+            .distinct()
+            .map { pkg ->
+                val label = runCatching {
+                    pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+                }.getOrDefault(pkg)
+                InstalledApp(pkg, label)
+            }
+            .sortedBy { it.label.lowercase() }
+            .toList()
+    }
+}

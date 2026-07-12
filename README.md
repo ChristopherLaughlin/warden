@@ -28,25 +28,40 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 
 ## Feature status
 
-**v1 (this scaffold — core is stubbed end-to-end and ready to build on):**
-- [x] Website blocking via local DNS-filtering VPN
-- [x] App blocking via accessibility service + block screen
-- [x] Persistent blocklist (Room)
-- [x] Master on/off with system VPN consent flow
-- [x] Time-based schedules (data model + evaluator; quick-add UI)
-- [x] Usage/screen-time dashboard (UsageStatsManager)
-- [x] Strict-mode + PBKDF2 PIN hashing scaffolding
-- [x] Restart-after-reboot
+**Implemented:**
+- [x] Website blocking via local DNS-filtering VPN (all browsers/apps, no root)
+- [x] App blocking via accessibility service
+- [x] **Mindful pause** (ScreenZen-style): breathe + intention prompt + wait, then earn
+      time-boxed access — *"Continue for 1 / 5 / 15 min"*
+- [x] **Per-app limits**: opens-per-day, daily time limit, cooldown between opens
+- [x] Installed-app picker + per-item config editor (hard block vs pause + limits)
+- [x] Full **schedule editor** (name, per-day toggles, start/end time pickers, overnight windows)
+- [x] **Strict mode** + **device-admin uninstall protection**
+- [x] **PIN lock** (PBKDF2, salted) gating settings and disabling
+- [x] **Focus streak** + screen-time dashboard ("track your wins")
+- [x] Master on/off with VPN consent flow, restart-after-reboot
 
-**Roadmap (matching AppBlock and going beyond — see `SPEC.md`):**
-- [ ] Full schedule editor (per-day, multiple windows, per-item scope)
-- [ ] PIN lock screen + strict-mode enforcement (device admin / uninstall protection)
-- [ ] Conditions beyond time: Wi-Fi network, location, launch-count, usage limit
+**Roadmap (see `SPEC.md`):**
+- [ ] Conditions beyond time: Wi-Fi network, location, launch-count
+- [ ] In-app feature blocking (Reels / Shorts / feeds) via accessibility
 - [ ] Adult-content category blocking (curated domain lists)
-- [ ] Notification blocking for blocked apps
-- [ ] Quick-block tile + focus sessions (Pomodoro)
+- [ ] Notification blocking for blocked apps during active windows
+- [ ] Quick-settings tile + Pomodoro focus sessions
 - [ ] Per-item schedule assignment
 - [ ] Import/export & optional end-to-end encrypted sync
+
+### How it compares
+| | AppBlock | ScreenZen | **Warden** |
+|---|---|---|---|
+| Website blocking (all apps) | ✓ | limited | ✓ (DNS VPN) |
+| App blocking | ✓ | ✓ | ✓ |
+| Mindful pause / intention | — | ✓ | ✓ |
+| Open/time/cooldown limits | ✓ | ✓ | ✓ |
+| Schedules | ✓ | ✓ | ✓ |
+| Strict mode + uninstall lock | ✓ | ✓ | ✓ |
+| PIN lock | ✓ | — | ✓ |
+| Streaks | — | ✓ | ✓ |
+| Price | freemium | free | **free + open-source** |
 
 ## Building
 

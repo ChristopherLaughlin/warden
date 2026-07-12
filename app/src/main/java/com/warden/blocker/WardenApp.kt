@@ -3,10 +3,12 @@ package com.warden.blocker
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import com.warden.blocker.block.AccessController
 import com.warden.blocker.block.BlockEngine
 import com.warden.blocker.data.BlockRepository
 import com.warden.blocker.data.SettingsStore
 import com.warden.blocker.data.WardenDatabase
+import com.warden.blocker.usage.UsageStatsHelper
 
 /**
  * Poor-man's DI: a single container of app-scoped singletons reachable from
@@ -42,6 +44,9 @@ class AppContainer(app: Application) {
     val settings = SettingsStore(app)
     val repository = BlockRepository(WardenDatabase.get(app).blockDao())
     val blockEngine = BlockEngine(repository, settings)
+    val accessController = AccessController(repository, blockEngine) { pkg ->
+        UsageStatsHelper.todayUsageMinutesFor(app, pkg)
+    }
 }
 
 /** Convenience accessor from any Context. */

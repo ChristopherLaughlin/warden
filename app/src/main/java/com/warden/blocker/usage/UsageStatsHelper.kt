@@ -21,6 +21,13 @@ object UsageStatsHelper {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
+    /** Foreground minutes for a single package since midnight today (0 if none / no permission). */
+    fun todayUsageMinutesFor(context: Context, packageName: String): Long {
+        if (!hasPermission(context)) return 0
+        return todayUsage(context).firstOrNull { it.packageName == packageName }
+            ?.let { it.totalMillis / 60_000L } ?: 0
+    }
+
     /** Per-app foreground time since midnight today, most-used first. */
     fun todayUsage(context: Context): List<AppUsage> {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -29,7 +36,7 @@ object UsageStatsHelper {
             set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         val end = System.currentTimeMillis()
-        return usm.queryUsageStats(UsageStatsManager.INTERVAL_DAY, start, end)
+        return usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, start, end)
             .filter { it.totalTimeInForeground > 0 }
             .groupBy { it.packageName }
             .map { (pkg, stats) -> AppUsage(pkg, stats.sumOf { it.totalTimeInForeground }) }

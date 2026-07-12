@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Warden requests NO enforcement policies. Active-admin status alone provides
+     uninstall protection; we deliberately declare no password/lock/wipe powers. -->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies />
+</device-admin>
