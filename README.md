@@ -44,6 +44,10 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 - [x] **Quick Settings tile** — one-tap blocking toggle from the shade (respects the PIN gate)
 - [x] **Focus sessions** — a Pomodoro-style timer that forces blocking on for a set duration
       (optional strict mode with no early exit), independent of the master switch
+- [x] **Notification blocking** — silence notifications from blocked apps while blocking is active
+- [x] **DNS-over-HTTPS blocking** — optionally sinkhole encrypted-DNS resolvers to close the browser bypass
+- [x] **Always-on or schedule-only** modes, a first-run **setup** screen, app icons throughout,
+      and **data-loss-safe upgrades** (real Room migrations)
 - [x] Master on/off with VPN consent flow, restart-after-reboot
 
 **Roadmap (see `SPEC.md`):**
@@ -67,6 +71,8 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 | Schedules | ✓ | ✓ | ✓ |
 | Strict mode + uninstall lock | ✓ | ✓ | ✓ |
 | Focus / Pomodoro sessions | — | ✓ | ✓ |
+| Notification blocking | ✓ | — | ✓ |
+| Encrypted-DNS (DoH) blocking | — | — | ✓ |
 | PIN lock | ✓ | — | ✓ |
 | Streaks | — | ✓ | ✓ |
 | Price | freemium | free | **free + open-source** |
