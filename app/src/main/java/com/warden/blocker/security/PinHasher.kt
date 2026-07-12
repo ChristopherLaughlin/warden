@@ -21,9 +21,13 @@ object PinHasher {
     fun hash(pin: String, saltB64: String): String {
         val salt = Base64.decode(saltB64, Base64.NO_WRAP)
         val spec = PBEKeySpec(pin.toCharArray(), salt, ITERATIONS, KEY_LENGTH)
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val hash = factory.generateSecret(spec).encoded
-        return Base64.encodeToString(hash, Base64.NO_WRAP)
+        try {
+            val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            val hash = factory.generateSecret(spec).encoded
+            return Base64.encodeToString(hash, Base64.NO_WRAP)
+        } finally {
+            spec.clearPassword() // wipe the PIN chars from the spec asap
+        }
     }
 
     fun verify(pin: String, saltB64: String, expectedHashB64: String): Boolean =

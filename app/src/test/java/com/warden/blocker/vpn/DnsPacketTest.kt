@@ -69,6 +69,14 @@ class DnsPacketTest {
         assertNull(DnsPacket.parse(tcp, tcp.size))
     }
 
+    @Test fun rejectsBogusHeaderLength() {
+        // IHL nibble claims a 60-byte header on a ~57-byte packet → must be rejected, not
+        // parsed against stale buffer bytes.
+        val p = buildQuery("example.com")
+        p[0] = 0x4F.toByte() // version 4, IHL 15 (=60 bytes)
+        assertNull(DnsPacket.parse(p, p.size))
+    }
+
     @Test fun sinkholeResponseIsWellFormed() {
         val packet = buildQuery("tracker.example.com")
         val parsed = DnsPacket.parse(packet, packet.size)!!

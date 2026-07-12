@@ -21,10 +21,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.InetAddress
-import java.net.InetSocketAddress
 import java.nio.ByteBuffer
-import java.nio.channels.DatagramChannel
 
 /**
  * Local, no-root VPN that captures DNS traffic and blackholes queries for blocked
@@ -90,12 +90,6 @@ class WardenVpnService : VpnService() {
         val input = FileInputStream(pfd.fileDescriptor)
         val output = FileOutputStream(pfd.fileDescriptor)
         val packet = ByteArray(MTU)
-        val upstream = try {
-            DatagramChannel.open().also { protect(it.socket()) }
-        } catch (e: Exception) {
-            Log.e(TAG, "Could not open upstream DNS socket; stopping tunnel", e)
-            return
-        }
 
         try {
             while (scope.isActive) {
@@ -109,13 +103,11 @@ class WardenVpnService : VpnService() {
                     // Never log the domain — that would leak browsing history into logcat.
                     runCatching { output.write(DnsPacket.buildSinkholeResponse(packet, read, parsed)) }
                 } else {
-                    forward(packet, read, parsed, upstream, output)
+                    forward(packet, parsed, output)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Packet loop terminated unexpectedly", e)
-        } finally {
-            runCatching { upstream.close() }
         }
     }
 
@@ -123,30 +115,35 @@ class WardenVpnService : VpnService() {
     private fun isBlocked(host: String): Boolean =
         blockedDomains.any { host == it || host.endsWith(".$it") }
 
-    /** Forward the raw DNS query to a real resolver and write the reply back into the tun. */
-    private fun forward(
-        packet: ByteArray,
-        length: Int,
-        parsed: DnsPacket.Parsed,
-        upstream: DatagramChannel,
-        output: FileOutputStream,
-    ) {
+    /**
+     * Forward one DNS query to the device's resolver and write the reply back into the tun.
+     * Uses a fresh **connected** socket per query so only the intended resolver's replies are
+     * accepted, and verifies the DNS transaction ID — together these block off-path response
+     * spoofing / cache-poisoning on a hostile network.
+     */
+    private fun forward(packet: ByteArray, parsed: DnsPacket.Parsed, output: FileOutputStream) {
+        val query = packet.copyOfRange(parsed.dnsPayloadOffset, parsed.dnsPayloadOffset + parsed.dnsPayloadLen)
+        val target = upstreamDns.firstOrNull() ?: fallbackDns
+        var socket: DatagramSocket? = null
         try {
-            val query = ByteBuffer.wrap(
-                packet, parsed.dnsPayloadOffset, parsed.dnsPayloadLen,
-            )
-            val target = upstreamDns.firstOrNull() ?: fallbackDns
-            upstream.send(query, InetSocketAddress(target, DnsPacket.DNS_PORT))
-            val replyBuf = ByteBuffer.allocate(MTU)
-            upstream.socket().soTimeout = 3000
-            upstream.receive(replyBuf)
-            replyBuf.flip()
-            val reply = ByteArray(replyBuf.remaining())
-            replyBuf.get(reply)
-            output.write(wrapReply(packet, parsed, reply))
+            socket = DatagramSocket()
+            protect(socket)
+            socket.connect(target, DnsPacket.DNS_PORT) // only accept replies from this resolver
+            socket.soTimeout = 3000
+            socket.send(DatagramPacket(query, query.size))
+
+            val buf = ByteArray(MTU)
+            val replyPacket = DatagramPacket(buf, buf.size)
+            socket.receive(replyPacket)
+            val replyLen = replyPacket.length
+            // Transaction-ID must match the query, else it's a spoofed / stray reply — drop it.
+            if (replyLen < 2 || buf[0] != query[0] || buf[1] != query[1]) return
+            output.write(wrapReply(packet, parsed, buf.copyOf(replyLen)))
         } catch (e: Exception) {
-            // Don't log the domain (privacy); the message alone is enough to diagnose.
+            // Don't log the domain (privacy); the exception class is enough to diagnose.
             Log.w(TAG, "DNS forward failed: ${e.javaClass.simpleName}")
+        } finally {
+            runCatching { socket?.close() }
         }
     }
 

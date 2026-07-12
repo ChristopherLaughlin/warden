@@ -30,6 +30,9 @@ object DnsPacket {
         val version = (packet[0].toInt() ushr 4) and 0xF
         if (version != 4) return null
         val ihl = (packet[0].toInt() and 0xF) * 4
+        // ihl comes from the packet itself; validate it fits before reading UDP/DNS at that
+        // offset, so a malformed header can't make us parse stale bytes from the reused buffer.
+        if (ihl < IPV4_MIN_HEADER || ihl + UDP_HEADER > length) return null
         val protocol = packet[9].toInt() and 0xFF
         if (protocol != 17 /* UDP */) return null
 
