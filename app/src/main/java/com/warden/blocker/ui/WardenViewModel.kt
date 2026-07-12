@@ -8,6 +8,7 @@ import com.warden.blocker.data.BlockedItem
 import com.warden.blocker.data.InterceptMode
 import com.warden.blocker.data.Schedule
 import com.warden.blocker.security.PinHasher
+import com.warden.blocker.system.FocusEndWorker
 import com.warden.blocker.wardenContainer
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +37,27 @@ class WardenViewModel(app: Application) : AndroidViewModel(app) {
 
     val enabledFeatureKeys: StateFlow<Set<String>> =
         container.settings.enabledFeatureKeys.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val focusEndsAt: StateFlow<Long> =
+        container.settings.focusEndsAt.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+    val focusStrict: StateFlow<Boolean> =
+        container.settings.focusStrict.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** Begin a focus session that forces blocking on for [minutes]. */
+    fun startFocus(minutes: Int, strict: Boolean) = viewModelScope.launch {
+        val endsAt = System.currentTimeMillis() + minutes * 60_000L
+        container.settings.startFocus(endsAt, strict)
+        FocusEndWorker.schedule(getApplication(), minutes * 60_000L)
+    }
+
+    /** Cancel early; refused while a strict session is still running. */
+    fun cancelFocus() = viewModelScope.launch {
+        val strict = container.settings.focusStrict.first()
+        val endsAt = container.settings.focusEndsAt.first()
+        if (strict && endsAt > System.currentTimeMillis()) return@launch
+        container.settings.clearFocus()
+        FocusEndWorker.cancel(getApplication())
+    }
 
     fun setFeatureEnabled(key: String, enabled: Boolean) = viewModelScope.launch {
         container.settings.setFeatureEnabled(key, enabled)

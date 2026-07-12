@@ -21,6 +21,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -50,27 +53,35 @@ class MainActivity : ComponentActivity() {
                 val vm: WardenViewModel = viewModel()
                 LaunchedEffect(Unit) { vm.onAppOpened() }
 
+                var pendingAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
                 val consentLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
                 ) { result ->
-                    if (result.resultCode == Activity.RESULT_OK) {
-                        VpnController.start(this)
-                        vm.setMasterEnabled(true)
-                    }
+                    if (result.resultCode == Activity.RESULT_OK) pendingAfterConsent?.invoke()
+                    pendingAfterConsent = null
+                }
+
+                fun withVpn(action: () -> Unit) {
+                    val consent = VpnController.consentIntent(this@MainActivity)
+                    if (consent == null) action() else { pendingAfterConsent = action; consentLauncher.launch(consent) }
                 }
 
                 fun toggleBlocking(enabled: Boolean) {
-                    if (enabled) {
-                        val consent = VpnController.consentIntent(this)
-                        if (consent != null) consentLauncher.launch(consent)
-                        else { VpnController.start(this); vm.setMasterEnabled(true) }
-                    } else {
-                        VpnController.stop(this)
-                        vm.setMasterEnabled(false)
-                    }
+                    if (enabled) withVpn { VpnController.start(this@MainActivity); vm.setMasterEnabled(true) }
+                    else { VpnController.stop(this@MainActivity); vm.setMasterEnabled(false) }
                 }
 
-                WardenScaffold(vm, ::toggleBlocking)
+                fun startFocus(minutes: Int, strict: Boolean) {
+                    vm.startFocus(minutes, strict)
+                    withVpn { VpnController.start(this@MainActivity) }
+                }
+
+                fun cancelFocus() {
+                    vm.cancelFocus()
+                    if (!vm.masterEnabled.value) VpnController.stop(this@MainActivity)
+                }
+
+                WardenScaffold(vm, ::toggleBlocking, ::startFocus, ::cancelFocus)
             }
         }
     }
@@ -85,7 +96,12 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
 }
 
 @Composable
-private fun WardenScaffold(vm: WardenViewModel, onToggleBlocking: (Boolean) -> Unit) {
+private fun WardenScaffold(
+    vm: WardenViewModel,
+    onToggleBlocking: (Boolean) -> Unit,
+    onStartFocus: (Int, Boolean) -> Unit,
+    onCancelFocus: () -> Unit,
+) {
     val navController = rememberNavController()
     Scaffold(
         bottomBar = {
@@ -110,7 +126,7 @@ private fun WardenScaffold(vm: WardenViewModel, onToggleBlocking: (Boolean) -> U
         },
     ) { padding ->
         NavHost(navController, startDestination = Tab.HOME.route, modifier = Modifier.padding(padding)) {
-            composable(Tab.HOME.route) { HomeScreen(vm, onToggleBlocking) }
+            composable(Tab.HOME.route) { HomeScreen(vm, onToggleBlocking, onStartFocus, onCancelFocus) }
             composable(Tab.BLOCKLIST.route) {
                 BlocklistScreen(
                     vm,

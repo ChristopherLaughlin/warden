@@ -42,11 +42,12 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 - [x] **In-app feed blocking** — block just Reels / Shorts / Explore / For You / Spotlight
       while the rest of the app keeps working (accessibility node detection)
 - [x] **Quick Settings tile** — one-tap blocking toggle from the shade (respects the PIN gate)
+- [x] **Focus sessions** — a Pomodoro-style timer that forces blocking on for a set duration
+      (optional strict mode with no early exit), independent of the master switch
 - [x] Master on/off with VPN consent flow, restart-after-reboot
 
 **Roadmap (see `SPEC.md`):**
 - [ ] Conditions beyond time: Wi-Fi network, location, launch-count
-- [ ] Pomodoro / timed focus sessions
 - [ ] Tune in-app feed detection signals against current app versions (needs real devices —
       see [DEVICE_TESTING.md](DEVICE_TESTING.md))
 - [ ] Adult-content category blocking (curated domain lists)
@@ -65,6 +66,7 @@ adds itself to the disallowed-apps list so it never filters its own traffic. See
 | Open/time/cooldown limits | ✓ | ✓ | ✓ |
 | Schedules | ✓ | ✓ | ✓ |
 | Strict mode + uninstall lock | ✓ | ✓ | ✓ |
+| Focus / Pomodoro sessions | — | ✓ | ✓ |
 | PIN lock | ✓ | — | ✓ |
 | Streaks | — | ✓ | ✓ |
 | Price | freemium | free | **free + open-source** |

@@ -30,6 +30,8 @@ class SettingsStore(private val context: Context) {
         val LONGEST_STREAK = intPreferencesKey("longest_streak")
         val LAST_ACTIVE_DAY = longPreferencesKey("last_active_day")
         val ENABLED_FEATURES = stringSetPreferencesKey("enabled_features")
+        val FOCUS_ENDS_AT = longPreferencesKey("focus_ends_at")
+        val FOCUS_STRICT = booleanPreferencesKey("focus_strict")
     }
 
     val masterEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.MASTER_ENABLED] ?: false }
@@ -39,6 +41,16 @@ class SettingsStore(private val context: Context) {
     val currentStreak: Flow<Int> = context.dataStore.data.map { it[Keys.CURRENT_STREAK] ?: 0 }
     val longestStreak: Flow<Int> = context.dataStore.data.map { it[Keys.LONGEST_STREAK] ?: 0 }
     val enabledFeatureKeys: Flow<Set<String>> = context.dataStore.data.map { it[Keys.ENABLED_FEATURES] ?: emptySet() }
+
+    /** Epoch millis a focus session ends (0 = none), and whether it can be cancelled early. */
+    val focusEndsAt: Flow<Long> = context.dataStore.data.map { it[Keys.FOCUS_ENDS_AT] ?: 0L }
+    val focusStrict: Flow<Boolean> = context.dataStore.data.map { it[Keys.FOCUS_STRICT] ?: false }
+
+    suspend fun startFocus(endsAt: Long, strict: Boolean) =
+        context.dataStore.edit { it[Keys.FOCUS_ENDS_AT] = endsAt; it[Keys.FOCUS_STRICT] = strict }.let { }
+
+    suspend fun clearFocus() =
+        context.dataStore.edit { it.remove(Keys.FOCUS_ENDS_AT); it.remove(Keys.FOCUS_STRICT) }.let { }
 
     suspend fun setFeatureEnabled(key: String, enabled: Boolean) =
         context.dataStore.edit { p ->

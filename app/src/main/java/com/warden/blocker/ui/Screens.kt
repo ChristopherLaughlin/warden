@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -32,10 +33,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -51,15 +54,25 @@ import com.warden.blocker.usage.UsageStatsHelper
 import java.util.concurrent.TimeUnit
 
 @Composable
-fun HomeScreen(vm: WardenViewModel, onToggleBlocking: (Boolean) -> Unit) {
+fun HomeScreen(
+    vm: WardenViewModel,
+    onToggleBlocking: (Boolean) -> Unit,
+    onStartFocus: (Int, Boolean) -> Unit,
+    onCancelFocus: () -> Unit,
+) {
     val enabled by vm.masterEnabled.collectAsStateWithLifecycle()
     val hasPin by vm.hasPin.collectAsStateWithLifecycle()
     val streak by vm.currentStreak.collectAsStateWithLifecycle()
+    val focusEndsAt by vm.focusEndsAt.collectAsStateWithLifecycle()
+    val focusStrict by vm.focusStrict.collectAsStateWithLifecycle()
     val items by vm.items.collectAsStateWithLifecycle()
     val activeCount = items.count { it.enabled }
     var showVerify by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         Text("Warden", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -83,6 +96,7 @@ fun HomeScreen(vm: WardenViewModel, onToggleBlocking: (Boolean) -> Unit) {
                 )
             }
         }
+        FocusCard(focusEndsAt = focusEndsAt, strict = focusStrict, onStart = onStartFocus, onCancel = onCancelFocus)
         if (streak > 0) {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -342,6 +356,50 @@ fun SettingsScreen(vm: WardenViewModel) {
     if (showRemovePin) {
         VerifyPinDialog("Enter PIN to remove", vm::verifyPin, onSuccess = { vm.clearPin(); showRemovePin = false }, onDismiss = { showRemovePin = false })
     }
+}
+
+@Composable
+private fun FocusCard(focusEndsAt: Long, strict: Boolean, onStart: (Int, Boolean) -> Unit, onCancel: () -> Unit) {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(focusEndsAt) {
+        while (true) { now = System.currentTimeMillis(); delay(1000) }
+    }
+    val active = focusEndsAt > now
+
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (active) {
+                Text("Focus session", style = MaterialTheme.typography.titleMedium)
+                Text(formatCountdown(focusEndsAt - now), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                Text(
+                    if (strict) "Strict — this can't be ended early. Deep work, locked in." else "Blocking stays on until the timer ends.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (!strict) OutlinedButton(onClick = onCancel) { Text("End session") }
+            } else {
+                Text("Start a focus session", style = MaterialTheme.typography.titleMedium)
+                Text("Force blocking on for a set time — great for deep work.", style = MaterialTheme.typography.bodySmall)
+                var strictChoice by remember { mutableStateOf(false) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = strictChoice, onCheckedChange = { strictChoice = it })
+                    Text("Strict (no early exit)", style = MaterialTheme.typography.bodyMedium)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(25, 50).forEach { m ->
+                        Button(onClick = { onStart(m, strictChoice) }) { Text("$m min") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatCountdown(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
 
 @Composable
