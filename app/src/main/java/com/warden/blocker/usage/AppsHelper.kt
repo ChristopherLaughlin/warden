@@ -3,6 +3,9 @@ package com.warden.blocker.usage
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 
 data class InstalledApp(val packageName: String, val label: String)
 
@@ -26,4 +29,9 @@ object AppsHelper {
             .sortedBy { it.label.lowercase() }
             .toList()
     }
+
+    /** Loads an app's launcher icon as an ImageBitmap (null if the package is gone). */
+    fun loadIcon(context: Context, packageName: String): ImageBitmap? = runCatching {
+        context.packageManager.getApplicationIcon(packageName).toBitmap(96, 96).asImageBitmap()
+    }.getOrNull()
 }

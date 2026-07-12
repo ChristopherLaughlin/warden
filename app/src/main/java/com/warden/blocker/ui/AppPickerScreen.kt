@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -74,6 +75,7 @@ fun AppPickerScreen(vm: WardenViewModel) {
                             .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        AppIcon(app.packageName, modifier = Modifier.size(40.dp).padding(end = 12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(app.label, style = MaterialTheme.typography.bodyLarge)
                             Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)

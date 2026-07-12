@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -162,6 +163,11 @@ fun BlocklistScreen(vm: WardenViewModel, onOpenAppPicker: () -> Unit, onOpenFeat
             items(items, key = { it.id }) { item ->
                 Card(Modifier.fillMaxWidth().clickable { editing = item }) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (item.type == BlockType.APP) {
+                            AppIcon(item.value, modifier = Modifier.size(36.dp).padding(end = 12.dp))
+                        } else {
+                            Text("🌐", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(end = 12.dp))
+                        }
                         Column(Modifier.weight(1f)) {
                             Text(item.label, style = MaterialTheme.typography.titleMedium)
                             Text(itemSummary(item), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
