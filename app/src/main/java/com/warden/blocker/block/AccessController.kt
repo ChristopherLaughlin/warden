@@ -33,26 +33,46 @@ class AccessController(
     suspend fun decideForPackage(packageName: String): AccessDecision {
         if (!engine.isBlockingActiveNow()) return AccessDecision.Allow
         val item = repo.appItem(packageName) ?: return AccessDecision.Allow
-        if (!item.enabled) return AccessDecision.Allow
 
         val now = System.currentTimeMillis()
-        if (repo.activeGrant(item.id, now) != null) return AccessDecision.Allow
+        // Fetch only what each check needs (usage stats especially aren't free).
+        val hasGrant = repo.activeGrant(item.id, now) != null
+        val used = if (item.dailyLimitMinutes > 0) usageMinutesToday(packageName) else 0L
+        val opens = if (item.openLimitPerDay > 0) repo.opensToday(item.id) else 0
+        val last = if (item.cooldownMinutes > 0) repo.lastGrantAt(item.id) else null
 
-        if (item.interceptMode == InterceptMode.BLOCK) return AccessDecision.HardBlock(item)
+        return decide(item, hasGrant, opens, last, used, now)
+    }
 
-        // PAUSE mode: enforce limits before offering the pause.
-        if (item.dailyLimitMinutes > 0 && usageMinutesToday(packageName) >= item.dailyLimitMinutes) {
-            return AccessDecision.LimitReached(item, LimitReason.TIME)
-        }
-        if (item.openLimitPerDay > 0 && repo.opensToday(item.id) >= item.openLimitPerDay) {
-            return AccessDecision.LimitReached(item, LimitReason.OPENS)
-        }
-        if (item.cooldownMinutes > 0) {
-            val last = repo.lastGrantAt(item.id)
-            if (last != null && now - last < item.cooldownMinutes * 60_000L) {
+    companion object {
+        /**
+         * Pure decision logic — no I/O — so it's exhaustively unit-testable. Assumes blocking
+         * is active and [item] is the (enabled) app in question.
+         */
+        fun decide(
+            item: BlockedItem,
+            hasActiveGrant: Boolean,
+            opensToday: Int,
+            lastGrantAt: Long?,
+            usedMinutesToday: Long,
+            now: Long,
+        ): AccessDecision {
+            if (!item.enabled) return AccessDecision.Allow
+            if (hasActiveGrant) return AccessDecision.Allow
+            if (item.interceptMode == InterceptMode.BLOCK) return AccessDecision.HardBlock(item)
+
+            if (item.dailyLimitMinutes > 0 && usedMinutesToday >= item.dailyLimitMinutes) {
+                return AccessDecision.LimitReached(item, LimitReason.TIME)
+            }
+            if (item.openLimitPerDay > 0 && opensToday >= item.openLimitPerDay) {
+                return AccessDecision.LimitReached(item, LimitReason.OPENS)
+            }
+            if (item.cooldownMinutes > 0 && lastGrantAt != null &&
+                now - lastGrantAt < item.cooldownMinutes * 60_000L
+            ) {
                 return AccessDecision.LimitReached(item, LimitReason.COOLDOWN)
             }
+            return AccessDecision.Pause(item)
         }
-        return AccessDecision.Pause(item)
     }
 }
