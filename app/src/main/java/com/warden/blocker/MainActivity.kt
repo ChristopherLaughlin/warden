@@ -1,6 +1,7 @@
 package com.warden.blocker
 
 import android.app.Activity
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -51,7 +52,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             WardenTheme {
                 val vm: WardenViewModel = viewModel()
-                LaunchedEffect(Unit) { vm.onAppOpened() }
+
+                val notifPermLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) { /* result ignored; the app still works without it */ }
+                LaunchedEffect(Unit) {
+                    vm.onAppOpened()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notifPermLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
 
                 var pendingAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
                 val consentLauncher = rememberLauncherForActivityResult(
