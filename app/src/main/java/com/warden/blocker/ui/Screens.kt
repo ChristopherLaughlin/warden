@@ -51,6 +51,7 @@ import com.warden.blocker.data.InterceptMode
 import com.warden.blocker.data.Schedule
 import com.warden.blocker.system.AdminManager
 import com.warden.blocker.usage.UsageStatsHelper
+import com.warden.blocker.util.PermissionsHelper
 import java.util.concurrent.TimeUnit
 
 @Composable
@@ -59,7 +60,10 @@ fun HomeScreen(
     onToggleBlocking: (Boolean) -> Unit,
     onStartFocus: (Int, Boolean) -> Unit,
     onCancelFocus: () -> Unit,
+    onOpenSetup: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val needsSetup = !PermissionsHelper.essentialsGranted(context)
     val enabled by vm.masterEnabled.collectAsStateWithLifecycle()
     val hasPin by vm.hasPin.collectAsStateWithLifecycle()
     val streak by vm.currentStreak.collectAsStateWithLifecycle()
@@ -74,6 +78,14 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Warden", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        if (needsSetup) {
+            ElevatedCard(Modifier.fillMaxWidth().clickable { onOpenSetup() }) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Finish setup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Grant accessibility so Warden can block apps and feeds. Tap to fix.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -259,7 +271,7 @@ fun StatsScreen(vm: WardenViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: WardenViewModel) {
+fun SettingsScreen(vm: WardenViewModel, onOpenSetup: () -> Unit) {
     val context = LocalContext.current
     val strict by vm.strictMode.collectAsStateWithLifecycle()
     val alwaysOn by vm.alwaysOn.collectAsStateWithLifecycle()
@@ -356,12 +368,8 @@ fun SettingsScreen(vm: WardenViewModel) {
         }
 
         HorizontalDivider()
-        Text("Permissions", style = MaterialTheme.typography.titleMedium)
-        OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) {
-            Text("App-blocking (Accessibility)")
-        }
-        OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) {
-            Text("Usage access (screen-time)")
+        OutlinedButton(onClick = onOpenSetup, modifier = Modifier.fillMaxWidth()) {
+            Text("Setup & permissions")
         }
     }
 

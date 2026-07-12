@@ -40,6 +40,7 @@ import com.warden.blocker.ui.FeaturesScreen
 import com.warden.blocker.ui.HomeScreen
 import com.warden.blocker.ui.SchedulesScreen
 import com.warden.blocker.ui.SettingsScreen
+import com.warden.blocker.ui.SetupScreen
 import com.warden.blocker.ui.StatsScreen
 import com.warden.blocker.ui.WardenViewModel
 import com.warden.blocker.ui.theme.WardenTheme
@@ -139,7 +140,10 @@ private fun WardenScaffold(
         },
     ) { padding ->
         NavHost(navController, startDestination = Tab.HOME.route, modifier = Modifier.padding(padding)) {
-            composable(Tab.HOME.route) { HomeScreen(vm, onToggleBlocking, onStartFocus, onCancelFocus) }
+            composable(Tab.HOME.route) {
+                HomeScreen(vm, onToggleBlocking, onStartFocus, onCancelFocus, onOpenSetup = { navController.navigate("setup") })
+            }
+            composable("setup") { SetupScreen() }
             composable(Tab.BLOCKLIST.route) {
                 BlocklistScreen(
                     vm,
@@ -151,7 +155,7 @@ private fun WardenScaffold(
             composable("features") { FeaturesScreen(vm) }
             composable(Tab.SCHEDULES.route) { SchedulesScreen(vm) }
             composable(Tab.STATS.route) { StatsScreen(vm) }
-            composable(Tab.SETTINGS.route) { SettingsScreen(vm) }
+            composable(Tab.SETTINGS.route) { SettingsScreen(vm, onOpenSetup = { navController.navigate("setup") }) }
         }
     }
 }
