@@ -4,7 +4,7 @@ name: Auto-merge Claude PRs
 # nobody has to click merge. Why a workflow and not GitHub auto-merge: private Free-plan repos have
 # no branch protection, so `gh pr merge --auto` is unavailable.
 # Eligible: author claude[bot] or chris-grokbot, or head branch claude/*; not draft; same-repo;
-# no `hold` label. The workflow never pings @claude (no extra Claude runs); the box sweep does, within claude-budget.json.
+# no `hold` label. Never merges a PR that changes any STRATEGY.md or CLAUDE.md (R74): adds `hold`, disables GitHub auto-merge, comments once, and stops. The workflow never pings @claude (no extra Claude runs); the box sweep does, within claude-budget.json.
 # Needs secret GROKBOT_TOKEN (the chris-grokbot token, so merges and CI reruns trigger other workflows).
 # pull_request_target is safe here: this file runs from the default branch and never checks out PR code.
 
@@ -57,6 +57,8 @@ jobs:
           # Needs: GH_TOKEN (chris-grokbot token so merges trigger deploy workflows), gh, jq.
           # Eligible: open, not draft, same-repo, targets the default branch, no 'hold' label, and
           # author is claude[bot] or chris-grokbot or the head branch starts with claude/.
+          # Never merges (and disables GitHub auto-merge on) a PR whose changed files include any
+          # STRATEGY.md or CLAUDE.md (R74). Those get the 'hold' label and one comment, for the owner to approve.
           set -uo pipefail
           REPO="$1"; PR="$2"; DRY="${3:-}"
           say() { echo "[auto-merge $REPO#$PR] $*"; }
@@ -69,10 +71,35 @@ jobs:
           done
           j() { jq -r "$1" <<<"$pr"; }
           [ "$(j .state)" = open ] || { say "not open"; exit 0; }
-          [ "$(j .draft)" = false ] || { say "draft: skip"; exit 0; }
           [ "$(j .head.repo.full_name)" = "$REPO" ] || { say "fork: skip"; exit 0; }
           default=$(api "repos/$REPO" --jq .default_branch)
           [ "$(j .base.ref)" = "$default" ] || { say "base is not $default: skip"; exit 0; }
+
+          # R74: any STRATEGY.md or CLAUDE.md change waits for the owner's tap. Apply this
+          # before author or draft checks so a later "ready" or missed hold label cannot merge it.
+          gov=$(api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -E '(^|/)(STRATEGY|CLAUDE)\.md$' || true)
+          if [ -n "$gov" ]; then
+            say "governance file changed: $(echo "$gov" | tr '\n' ' ')"
+            if [ -n "$DRY" ]; then
+              say "would add hold, disable auto-merge, comment once, and not merge"
+              exit 0
+            fi
+            api -X POST "repos/$REPO/labels" -f name=hold -f color=B60205 -f description="Do not auto-merge; waiting for operator approval" >/dev/null 2>&1 || true
+            api -X POST "repos/$REPO/issues/$PR/labels" -f 'labels[]=hold' >/dev/null
+            if [ "$(gh pr view "$PR" -R "$REPO" --json autoMergeRequest --jq '.autoMergeRequest != null')" = true ]; then
+              gh pr merge "$PR" -R "$REPO" --disable-auto >/dev/null && say "disabled GitHub auto-merge"
+            fi
+            m="am-governance-hold"
+            if ! api "repos/$REPO/issues/$PR/comments?per_page=100" --paginate --jq '.[].body' | grep -q "$m"; then
+              gh pr comment "$PR" -R "$REPO" --body "Governance file changed: waiting for operator approval.
+          <!-- $m -->" >/dev/null
+              say "commented: waiting for operator approval"
+            fi
+            say "held for operator approval: not merging"
+            exit 0
+          fi
+
+          [ "$(j .draft)" = false ] || { say "draft: skip"; exit 0; }
           author=$(j .user.login); head=$(j .head.ref); sha=$(j .head.sha)
           case "$author" in "claude[bot]"|"chris-grokbot") ok=1 ;; *) ok=0 ;; esac
           case "$head" in claude/*) ok=1 ;; esac
