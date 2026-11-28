@@ -1,0 +1,140 @@
+name: Auto-merge Claude PRs
+
+# Squash-merges Claude's and the operator bot's PRs once their GitHub Actions checks are green, so
+# nobody has to click merge. Why a workflow and not GitHub auto-merge: private Free-plan repos have
+# no branch protection, so `gh pr merge --auto` is unavailable.
+# Eligible: author claude[bot] or chris-grokbot, or head branch claude/*; not draft; same-repo;
+# no `hold` label. A merge conflict or failing CI pings @claude once per commit.
+# Needs secret GROKBOT_TOKEN (the chris-grokbot token, so merges and CI reruns trigger other workflows).
+# pull_request_target is safe here: this file runs from the default branch and never checks out PR code.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+  workflow_run:
+    workflows:
+      - "Claude (handoffs)"
+    types: [completed]
+
+concurrency:
+  group: auto-merge-claude-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  automerge:
+    name: auto-merge-claude
+    if: >-
+      (github.event_name == 'pull_request_target' &&
+        (github.event.pull_request.user.login == 'claude[bot]' ||
+         github.event.pull_request.user.login == 'chris-grokbot' ||
+         startsWith(github.event.pull_request.head.ref, 'claude/')) &&
+        !github.event.pull_request.draft) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Evaluate and merge
+        env:
+          GH_TOKEN: ${{ secrets.GROKBOT_TOKEN || github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -u
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" --jq '[.[]|select(.state=="open")][0].number // empty')
+          fi
+          [ -n "$PR_NUMBER" ] || { echo "no open PR for this run"; exit 0; }
+          cat > "$RUNNER_TEMP/am.sh" <<'AMEOF'
+          #!/usr/bin/env bash
+          # Squash-merges one Claude/operator PR once its GitHub Actions checks are green.
+          # Usage: auto-merge-claude.sh OWNER/REPO PR_NUMBER [--dry-run]
+          # Needs: GH_TOKEN (chris-grokbot token so merges trigger deploy workflows), gh, jq.
+          # Eligible: open, not draft, same-repo, targets the default branch, no 'hold' label, and
+          # author is claude[bot] or chris-grokbot or the head branch starts with claude/.
+          set -uo pipefail
+          REPO="$1"; PR="$2"; DRY="${3:-}"
+          say() { echo "[auto-merge $REPO#$PR] $*"; }
+          api() { gh api "$@"; }
+
+          for try in 1 2 3 4; do
+            pr=$(api "repos/$REPO/pulls/$PR") || { say "cannot read PR"; exit 0; }
+            [ "$(jq -r .mergeable <<<"$pr")" != "null" ] && break
+            sleep 6
+          done
+          j() { jq -r "$1" <<<"$pr"; }
+          [ "$(j .state)" = open ] || { say "not open"; exit 0; }
+          [ "$(j .draft)" = false ] || { say "draft: skip"; exit 0; }
+          [ "$(j .head.repo.full_name)" = "$REPO" ] || { say "fork: skip"; exit 0; }
+          default=$(api "repos/$REPO" --jq .default_branch)
+          [ "$(j .base.ref)" = "$default" ] || { say "base is not $default: skip"; exit 0; }
+          author=$(j .user.login); head=$(j .head.ref); sha=$(j .head.sha)
+          case "$author" in "claude[bot]"|"chris-grokbot") ok=1 ;; *) ok=0 ;; esac
+          case "$head" in claude/*) ok=1 ;; esac
+          [ "$ok" = 1 ] || { say "author $author / branch $head not eligible: skip"; exit 0; }
+          j '.labels[].name' | grep -qix hold && { say "has hold label: skip"; exit 0; }
+
+          # One comment per (marker, sha) so a PR never gets repeated pings.
+          note() { # marker body
+            local m="am-$1-$sha"
+            if api "repos/$REPO/issues/$PR/comments?per_page=100" --paginate --jq '.[].body' | grep -q "$m"; then return; fi
+            [ -n "$DRY" ] && { say "would comment: $1"; return; }
+            gh pr comment "$PR" -R "$REPO" --body "$2
+          <!-- $m -->" >/dev/null
+          }
+
+          if [ "$(j .mergeable)" = false ]; then
+            say "merge conflict"
+            note conflict "@claude this PR has merge conflicts with $default. Please rebase on $default, resolve them, push, and keep CI green. The operator bot merges it automatically once CI is green. Do not ask the owner to merge."
+            exit 0
+          fi
+
+          # GitHub Actions runs for this head commit (latest run per workflow).
+          runs=$(api "repos/$REPO/actions/runs?head_sha=$sha&per_page=100" --jq '[.workflow_runs[]|select(.event=="pull_request" or .event=="pull_request_target")|select((.path//"")|test("auto-merge-claude")|not)]|group_by(.workflow_id)|map(max_by(.run_number))')
+          n=$(jq length <<<"$runs")
+
+          if [ "$n" = 0 ]; then
+            # No CI run. If the repo has pull_request workflows, the push came from a token that cannot trigger them: reopen once.
+            has_ci=0
+            for f in $(api "repos/$REPO/contents/.github/workflows?ref=$default" --jq '.[]|select(.name|test("auto-merge-claude")|not)|.name' 2>/dev/null); do
+              if api "repos/$REPO/contents/.github/workflows/$f?ref=$default" -H "Accept: application/vnd.github.raw" 2>/dev/null | grep -Eq '^[[:space:]]*pull_request(_target)?[[:space:]]*:|^on:.*pull_request|\[.*pull_request'; then has_ci=1; break; fi
+            done
+            if [ "$has_ci" = 1 ]; then
+              if api "repos/$REPO/commits/$sha/statuses" --jq '.[].context' | grep -qx "auto-merge/ci-kick"; then
+                say "repo has PR workflows but none ran after a kick (path filters?): treating as no required checks"
+              else
+                say "no CI run yet: kicking CI by reopening"
+                if [ -z "$DRY" ]; then
+                  api -X POST "repos/$REPO/statuses/$sha" -f state=success -f context="auto-merge/ci-kick" -f description="reopened to start CI" >/dev/null
+                  gh pr close "$PR" -R "$REPO" >/dev/null && gh pr reopen "$PR" -R "$REPO" >/dev/null
+                fi
+                exit 0
+              fi
+            fi
+          else
+            pending=$(jq -r '[.[]|select(.status!="completed")]|length' <<<"$runs")
+            needs_approval=$(jq -r '.[]|select(.conclusion=="action_required")|.id' <<<"$runs")
+            if [ -n "$needs_approval" ]; then
+              for id in $needs_approval; do say "approving run $id"; [ -z "$DRY" ] && api -X POST "repos/$REPO/actions/runs/$id/approve" >/dev/null; done
+              exit 0
+            fi
+            [ "$pending" = 0 ] || { say "$pending workflow run(s) still running: wait"; exit 0; }
+            failed=$(jq -r '[.[]|select(.conclusion=="failure" or .conclusion=="timed_out" or .conclusion=="startup_failure")|.name]|join(", ")' <<<"$runs")
+            if [ -n "$failed" ]; then
+              say "failing: $failed"
+              note fail "@claude CI failed on this PR ($failed). Please read the failing job logs, fix the cause, push, and make sure CI is green. The operator bot merges it automatically once CI is green. Do not ask the owner to merge or review."
+              exit 0
+            fi
+          fi
+
+          say "green: squash-merging $sha"
+          [ -n "$DRY" ] && exit 0
+          gh pr merge "$PR" -R "$REPO" --squash --delete-branch --match-head-commit "$sha" && say "merged" || say "merge failed"
+          AMEOF
+          bash "$RUNNER_TEMP/am.sh" "$REPO" "$PR_NUMBER"
+
