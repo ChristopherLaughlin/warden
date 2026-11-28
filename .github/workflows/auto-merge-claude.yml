@@ -4,7 +4,7 @@ name: Auto-merge Claude PRs
 # nobody has to click merge. Why a workflow and not GitHub auto-merge: private Free-plan repos have
 # no branch protection, so `gh pr merge --auto` is unavailable.
 # Eligible: author claude[bot] or chris-grokbot, or head branch claude/*; not draft; same-repo;
-# no `hold` label. A merge conflict or failing CI pings @claude once per commit.
+# no `hold` label. The workflow never pings @claude (no extra Claude runs); the box sweep does, within claude-budget.json.
 # Needs secret GROKBOT_TOKEN (the chris-grokbot token, so merges and CI reruns trigger other workflows).
 # pull_request_target is safe here: this file runs from the default branch and never checks out PR code.
 
@@ -80,7 +80,10 @@ jobs:
           j '.labels[].name' | grep -qix hold && { say "has hold label: skip"; exit 0; }
 
           # One comment per (marker, sha) so a PR never gets repeated pings.
+          # Pings @claude only when AM_PING=1 (set by the box sweep after it checks /workspace/shared/claude-budget.json
+          # and the pause file). The in-repo workflow never pings, so it can never start an extra Claude run.
           note() { # marker body
+            [ "${AM_PING:-0}" = 1 ] || { say "would ping @claude ($1) but pings are off here"; return; }
             local m="am-$1-$sha"
             if api "repos/$REPO/issues/$PR/comments?per_page=100" --paginate --jq '.[].body' | grep -q "$m"; then return; fi
             [ -n "$DRY" ] && { say "would comment: $1"; return; }
