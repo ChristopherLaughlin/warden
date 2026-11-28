@@ -1,0 +1,75 @@
+name: Claude (handoffs)
+
+# Lets the operator bot hand work to Claude Code from a GitHub issue.
+# Triggers: label `needs-claude` (applied by GROK_BOT_LOGIN or the owner),
+# an issue opened by GROK_BOT_LOGIN containing @claude, an issue opened with the
+# label already on it, or an @claude comment by GROK_BOT_LOGIN or the owner.
+# Needs: secret CLAUDE_CODE_OAUTH_TOKEN, variable GROK_BOT_LOGIN, Claude GitHub App on the repo.
+# Claude cannot edit .github/workflows; the operator bot does that via PR.
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: claude-handoff-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    if: >-
+      (
+        github.event_name == 'issues' && github.event.action == 'labeled' &&
+        github.event.label.name == 'needs-claude' &&
+        (github.event.sender.login == vars.GROK_BOT_LOGIN || github.event.sender.login == github.repository_owner)
+      ) || (
+        vars.GROK_BOT_LOGIN != '' &&
+        github.event_name == 'issues' && github.event.action == 'opened' &&
+        github.event.issue.user.login == vars.GROK_BOT_LOGIN &&
+        contains(github.event.issue.body || '', '@claude') &&
+        !contains(github.event.issue.labels.*.name, 'needs-claude')
+      ) || (
+        github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body || '', '@claude') &&
+        (github.event.comment.user.login == vars.GROK_BOT_LOGIN || github.event.comment.user.login == github.repository_owner)
+      ) || (
+        github.event_name == 'issues' && github.event.action == 'opened' &&
+        contains(github.event.issue.labels.*.name, 'needs-claude') &&
+        (
+          (vars.GROK_BOT_LOGIN != '' && github.event.issue.user.login == vars.GROK_BOT_LOGIN) ||
+          github.event.issue.user.login == github.repository_owner
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+      checks: read
+      statuses: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          additional_permissions: |
+            actions: read
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "${{ github.event_name == 'issues' && github.event.action == 'opened' && contains(github.event.issue.labels.*.name, 'needs-claude') && 'This issue was opened with the needs-claude label. The issue body is the request.' || '' }}"
+          track_progress: "true"
+          label_trigger: "needs-claude"
+          allowed_bots: ${{ vars.GROK_BOT_LOGIN }}
+          branch_prefix: "claude/"
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Bash(gh pr create:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr checks:*),Bash(gh run list:*),Bash(gh run view:*)"
+            --append-system-prompt "You were triggered by a Grok Bot handoff. Read CLAUDE.md and README first if present. Run the project's tests/build before opening a PR. Put 'Fixes #<issue>' in the PR body. Never touch secrets, billing, or delete data. If a step needs a browser, dashboard or a human sign-in, open an issue labelled needs-operator with a checklist."
