@@ -1,10 +1,11 @@
 package com.warden.blocker.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -61,7 +62,12 @@ fun ScheduleEditorDialog(initial: Schedule?, onSave: (Schedule) -> Unit, onDismi
                     label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
                 Text("Days", style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     DAY_LETTERS.forEachIndexed { i, letter ->
                         FilterChip(
                             selected = (daysMask shr i) and 1 == 1,
